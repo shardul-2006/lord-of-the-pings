@@ -37,7 +37,7 @@ def test_ledger_stub_callable():
 
 
 def test_remaining_stubs_callable(tmp_path):
-    assert isinstance(render_overlay("d", 1, []), dict)
+    assert callable(render_overlay)  # real renderer (Phase 4) is tested in tests/phase4
     assert build_index([], "defended").index_version >= 0
     llm = MockLLM()
     assert answer("q", "defended", llm).model == llm.model_id

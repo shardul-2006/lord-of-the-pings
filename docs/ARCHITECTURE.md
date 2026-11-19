@@ -70,6 +70,25 @@ payloads) -> routing -> guard on escalated chunks -> fusion -> disposition -> sc
 - **Quarantine** is reversible: release/requarantine change record status, rebuild screened
   chunks and append an audit event (who, when, policy version). Nothing is deleted.
 
-## Index boundaries
-_TODO (Phase 4)_: forensic store, processing store, defended index, vulnerable demo index;
-index_version bump on quarantine/release/rescan before content is exposed.
+## Stores and index boundaries (Phase 4)
+| Store | Where | Used as LLM context? |
+|---|---|---|
+| Forensic | `$RAG_SHIELD_HOME/forensic/<sha256>.<ext>`, read-only copy of the original bytes | Never (overlay rendering and audit only) |
+| Processing | ledger tables `source_spans`, `sentences` | No |
+| Trust ledger | `documents`, `findings` (with highlight boxes), `quarantine`, `events` | No |
+| Defended index | `index_chunks` + `index_state.index_version`; screened chunks only | Yes (defended branch) |
+| Vulnerable demo | separate in-memory namespace inside `compare` | Yes (vulnerable branch only) |
+
+- **Index sync.** Release, re-quarantine and rescan run in ONE SQLite transaction: update the
+  quarantine row, delete the document's chunk rows, rebuild them from permitted sentences, bump
+  `index_version`, log the event, commit. Any failure rolls back everything, so a released
+  sentence becomes retrievable only after authorization **and** sync both succeed.
+- **Vector-store cache.** The in-memory store is rebuilt from `index_chunks` whenever the
+  committed `index_version` differs from the loaded one, so separate processes (CLI calls, API
+  workers) stay consistent. Rebuild is a full reload, which is fine at demo scale.
+- **Fail closed.** `unsupported`/`scan_failed` documents get zero index rows; a failed rescan
+  deletes the document's previous rows. `Shield.filter()` drops any chunk whose id or text is
+  not in the current index.
+- **Overlay** renders the forensic original with PyMuPDF; boxes come from the provenance map in
+  pdfplumber coordinates (same as PyMuPDF for unrotated pages). Tiny boxes are padded to 6 pt;
+  off-page text is marked with a band on the nearest page edge. Rotated pages are not handled.

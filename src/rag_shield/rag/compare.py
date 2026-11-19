@@ -19,7 +19,18 @@ from rag_shield.rag.pipeline import (
 )
 from rag_shield.rag.trace import save_trace
 
-DEFENSES = ("simple",)
+DEFENSES = ("shield", "simple")
+
+
+def _shield_chunks(pdf_path: str | Path) -> tuple[list[ScreenedChunk], str]:
+    from rag_shield.shield import Shield
+
+    shield = Shield(db_path=":memory:", keep_forensic=False)
+    try:
+        result = shield.ingest(pdf_path)
+        return result.clean_chunks, f"shield:{result.screen.policy_version}"
+    finally:
+        shield.close()
 
 
 def compare(
@@ -32,7 +43,11 @@ def compare(
     if defense not in DEFENSES:
         raise ValueError(f"unknown defense {defense!r}; available: {DEFENSES}")
     doc_sha = sha256_file(pdf_path)
-    sentences = sentence_ids(doc_sha, split_sentences(extract_pdf_text(pdf_path)))
+    try:
+        raw_text = extract_pdf_text(pdf_path)
+    except Exception:  # the naive pipeline cannot read it either (encrypted, malformed...)
+        raw_text = ""
+    sentences = sentence_ids(doc_sha, split_sentences(raw_text))
     pipe = RagPipeline()
 
     vulnerable_chunks = [
@@ -41,18 +56,21 @@ def compare(
     ]
     pipe.build_index(vulnerable_chunks, "vulnerable")
 
-    kept, _dropped = defended_simple.filter_sentences(sentences)
-    defended_chunks = [
-        ScreenedChunk(chunk_id(doc_sha, i), g.sentence_ids, [], g.text)
-        for i, g in enumerate(group_sentences(kept), start=1)
-    ]
+    if defense == "shield":
+        # Full pipeline; unsupported / scan_failed documents contribute no chunks at all.
+        defended_chunks, label = _shield_chunks(pdf_path)
+    else:
+        kept, _dropped = defended_simple.filter_sentences(sentences)
+        defended_chunks = [
+            ScreenedChunk(chunk_id(doc_sha, i), g.sentence_ids, [], g.text)
+            for i, g in enumerate(group_sentences(kept), start=1)
+        ]
+        label = defended_simple.DEFENSE_LABEL
     pipe.build_index(defended_chunks, "defended")
 
     traces = {
         "vulnerable": pipe.answer(question, "vulnerable", llm, doc_sha256=doc_sha),
-        "defended": pipe.answer(
-            question, "defended", llm, doc_sha256=doc_sha, defense=defended_simple.DEFENSE_LABEL
-        ),
+        "defended": pipe.answer(question, "defended", llm, doc_sha256=doc_sha, defense=label),
     }
     if out_dir is not None:
         for trace in traces.values():

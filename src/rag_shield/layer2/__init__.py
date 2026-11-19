@@ -104,16 +104,34 @@ def screen(
                        guard or make_guard(policy["guard"]["kind"]))
 
 
+def _signal_edges(ingest: IngestResult, types: set[str]) -> list[int]:
+    """Outer edges of signalled text, used as sentence boundaries.
+
+    Adjacent signalled ranges separated only by whitespace are merged first, so hidden text
+    wrapped over several lines stays one sentence. Zero-length insertion points (stripped
+    Unicode) sit inside words and are not boundaries.
+    """
+    text = ingest.canonical_text
+    ranges = sorted(
+        tuple(g.detail["canonical_offsets"]) for g in ingest.signals
+        if g.type in types and "canonical_offsets" in g.detail
+        and g.detail["canonical_offsets"][0] != g.detail["canonical_offsets"][1]
+    )
+    merged: list[list[int]] = []
+    for a, b in ranges:
+        if merged and (a <= merged[-1][1] or not text[merged[-1][1]:a].strip()):
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    return [o for r in merged for o in r]
+
+
 def _screen(ingest: IngestResult, policy: dict[str, Any], clf: Any, guard: Guard) -> ScreenResult:
     doc, version = ingest.document, policy["version"]
     max_chars = int(policy["chunk_max_chars"])
     fusion = policy["fusion"]
     flagged_types = set(fusion["signal_weights"]) | set(fusion["carrier_signals"])
-    # Signal edges become sentence boundaries, except zero-length insertion points (stripped
-    # Unicode), which sit inside words and would chop a sentence apart.
-    edges = [o for g in ingest.signals if g.type in flagged_types
-             for o in g.detail.get("canonical_offsets", [])
-             if g.detail["canonical_offsets"][0] != g.detail["canonical_offsets"][1]]
+    edges = _signal_edges(ingest, flagged_types)
 
     with timing.stage("sentences"):
         sentences = split_sentences(ingest.canonical_text, doc.doc_id, edges, ingest.provenance)

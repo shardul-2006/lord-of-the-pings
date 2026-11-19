@@ -59,6 +59,69 @@ def _cmd_screen(args: argparse.Namespace) -> int:
     return 0
 
 
+def _shield(args: argparse.Namespace):
+    from rag_shield.shield import Shield
+
+    return Shield(db_path=args.db) if args.db else Shield()
+
+
+def _cmd_shield_run(args: argparse.Namespace) -> int:
+    shield = _shield(args)
+    try:
+        result = shield.ingest(args.file)
+    finally:
+        shield.close()
+    d = result.to_dict()
+    if args.json:
+        print(json.dumps(d, indent=2))
+    else:
+        print(f"status: {d['status']}  indexed: {d['indexed']}  index_version: "
+              f"{d['index_version']}  doc_id: {d['doc_id']}")
+        for a in d["alerts"]:
+            print(f"  [{a['status']}] {a['sentence_id']} {a['signals']} {a['text'][:70]}")
+    return 0
+
+
+def _cmd_review(args: argparse.Namespace) -> int:
+    shield = _shield(args)
+    try:
+        if args.action == "list":
+            out: dict = {"items": shield.review_items()}
+        else:
+            out = shield.release(args.sentence_id, args.reviewer)
+    finally:
+        shield.close()
+    if args.json:
+        print(json.dumps(out, indent=2))
+    elif args.action == "list":
+        for it in out["items"]:
+            print(f"[{it['status']}] {it['sentence_id']} score={it['score']} {it['text'][:70]}")
+    else:
+        print(f"released: {out['released']}  index_version: {out['index_version']}"
+              + (f"  ({out['reason']})" if out.get("reason") else ""))
+    return 0 if args.action == "list" or out["released"] else 1
+
+
+def _cmd_overlay(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from rag_shield.rag.pipeline import sha256_file
+
+    shield = _shield(args)
+    try:
+        doc = shield.ledger.find_document_by_sha(sha256_file(args.file))
+        if doc is None:
+            print(f"error: {args.file} is not in the ledger; run shield-run first",
+                  file=sys.stderr)
+            return 2
+        png = shield.overlay(doc["doc_id"], args.page, source=args.file)
+    finally:
+        shield.close()
+    Path(args.out).write_bytes(png)
+    print(f"wrote {args.out}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     from rag_shield.rag.compare import DEFENSES
     from rag_shield.rag.pipeline import DEFAULT_QUESTION
@@ -69,7 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("compare", help="run vulnerable vs defended branches on one PDF")
     p.add_argument("pdf")
     p.add_argument("--llm", choices=["mock", "real"], default="mock")
-    p.add_argument("--defense", choices=DEFENSES, default="simple")
+    p.add_argument("--defense", choices=DEFENSES, default="shield")
     p.add_argument("--question", default=DEFAULT_QUESTION)
     p.add_argument("--json", action="store_true")
     p.add_argument("--out-dir", default=None, help="also save each trace as JSON here")
@@ -86,6 +149,33 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--policy", default=None, help="policy YAML (default: policy_v1)")
     p.add_argument("--guard", choices=["rule", "deberta"], default=None)
     p.set_defaults(func=_cmd_screen)
+
+    db_help = "ledger SQLite file (default: $RAG_SHIELD_HOME/ledger.db)"
+    p = sub.add_parser("shield-run", help="full pipeline: screen, record in ledger, index")
+    p.add_argument("file")
+    p.add_argument("--db", default=None, help=db_help)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_shield_run)
+
+    p = sub.add_parser("review", help="review queue: list withheld sentences or release one")
+    rsub = p.add_subparsers(dest="action", required=True)
+    r = rsub.add_parser("list")
+    r.add_argument("--db", default=None, help=db_help)
+    r.add_argument("--json", action="store_true")
+    r.set_defaults(func=_cmd_review)
+    r = rsub.add_parser("release")
+    r.add_argument("sentence_id")
+    r.add_argument("--reviewer", required=True)
+    r.add_argument("--db", default=None, help=db_help)
+    r.add_argument("--json", action="store_true")
+    r.set_defaults(func=_cmd_review)
+
+    p = sub.add_parser("overlay", help="render the evidence overlay of a PDF page to PNG")
+    p.add_argument("file")
+    p.add_argument("--page", type=int, default=1)
+    p.add_argument("--db", default=None, help=db_help)
+    p.add_argument("--out", required=True)
+    p.set_defaults(func=_cmd_overlay)
     return parser
 
 

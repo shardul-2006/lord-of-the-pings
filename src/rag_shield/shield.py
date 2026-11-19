@@ -1,27 +1,201 @@
-"""Shield: the library facade (Spec C). Phase 0 stub wiring to the stub modules."""
+"""Shield: the library facade (Spec C).
+
+ingest(path): scanner guard -> Layer 1 -> Layer 2 -> trust ledger -> defended index.
+Only screened chunks are indexed. unsupported / scan_failed documents are never indexed, and
+a failed rescan removes any chunks the document had before (fail closed).
+"""
 
 from __future__ import annotations
 
+import os
+import shutil
+import stat
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
+from rag_shield import timing
 from rag_shield.dataset_gate.screen import screen_dataset as _screen_dataset
 from rag_shield.layer1.ingest import ingest as _ingest
 from rag_shield.layer2 import screen as _screen
-from rag_shield.models import DatasetReport, OutputCheck, ScreenedChunk, ScreenResult
+from rag_shield.layer2 import screen_report
+from rag_shield.layer2.guard import Guard, make_guard
+from rag_shield.ledger.overlay import highlights_from_findings, render_overlay
+from rag_shield.ledger.store import Ledger
+from rag_shield.models import (
+    DatasetReport,
+    OutputCheck,
+    ScanStatus,
+    ScreenedChunk,
+    ScreenResult,
+)
+from rag_shield.policy import load_policy
+from rag_shield.rag.embedder import Embedder
+from rag_shield.rag.index_sync import DefendedIndex
+from rag_shield.scanner_guard import GuardConfig
+
+BLOCKED = (ScanStatus.UNSUPPORTED, ScanStatus.SCAN_FAILED)
+OWASP_TAG = "OWASP LLM01: Prompt Injection"
+ATLAS_TAG = "MITRE ATLAS AML.T0051.001: Indirect Prompt Injection"
+
+
+def default_home() -> Path:
+    return Path(os.environ.get("RAG_SHIELD_HOME") or Path.home() / ".rag_shield")
+
+
+@dataclass
+class ShieldIngest:
+    status: ScanStatus
+    doc_id: str
+    indexed: bool
+    index_version: int
+    screen: ScreenResult
+    alerts: list[dict[str, Any]] = field(default_factory=list)
+    reason: str = ""
+
+    @property
+    def clean_chunks(self) -> list[ScreenedChunk]:
+        return self.screen.screened_chunks if self.indexed else []
+
+    @property
+    def quarantined_ids(self) -> list[str]:
+        return [r.sentence_id for r in self.screen.quarantine if r.status == "quarantined"]
+
+    def to_dict(self) -> dict[str, Any]:
+        report = screen_report(self.screen)
+        return {
+            "status": self.status.value,
+            "doc_id": self.doc_id,
+            "indexed": self.indexed,
+            "index_version": self.index_version,
+            "reason": self.reason,
+            "quarantined_ids": self.quarantined_ids,
+            "review_ids": [r.sentence_id for r in self.screen.quarantine
+                           if r.status == "review_required"],
+            "alerts": self.alerts,
+            "screened_chunk_ids": [c.chunk_id for c in self.clean_chunks],
+            "screened_text": report["screened_text"] if self.indexed else "",
+            "policy_version": self.screen.policy_version,
+        }
 
 
 class Shield:
-    def __init__(self, domain: str = "hr", source_tier: str = "external_upload") -> None:
+    def __init__(
+        self,
+        domain: str = "hr",
+        source_tier: str = "external_upload",
+        *,
+        home: str | Path | None = None,
+        db_path: str | Path | None = None,
+        keep_forensic: bool = True,
+        policy: dict[str, Any] | None = None,
+        guard: Guard | None = None,
+        classifier: Any = None,
+        embedder: Embedder | None = None,
+        guard_config: GuardConfig | None = None,
+    ) -> None:
         self.domain = domain
         self.source_tier = source_tier
+        self.home = Path(home) if home else default_home()
+        self.policy = load_policy(overrides=policy) if policy else load_policy()
+        in_memory = str(db_path) == ":memory:"
+        self.ledger = Ledger(db_path or self.home / "ledger.db")
+        self.keep_forensic = keep_forensic and not in_memory
+        self.index = DefendedIndex(self.ledger, embedder)
+        self.guard = guard or make_guard(self.policy["guard"]["kind"])
+        self.classifier = classifier
+        self.guard_config = guard_config
 
-    def ingest(self, path: str | Path) -> ScreenResult:
-        return _screen(_ingest(path))
+    def close(self) -> None:
+        self.ledger.close()
+
+    # --- ingestion ----------------------------------------------------------------------------
+    def _forensic_copy(self, path: Path, sha: str) -> str:
+        if not self.keep_forensic or not sha:
+            return ""
+        dest = self.home / "forensic" / f"{sha}{path.suffix.lower()}"
+        if not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, dest)
+            os.chmod(dest, stat.S_IREAD)  # immutable original
+        return str(dest)
+
+    def ingest(self, path: str | Path) -> ShieldIngest:
+        path = Path(path)
+        with timing.stage("shield_ingest"):
+            ing = _ingest(path, self.guard_config)
+            scr = _screen(ing, self.policy, classifier=self.classifier, guard=self.guard)
+            highlights = self._highlights(ing, scr)
+            forensic = self._forensic_copy(path, ing.document.sha256)
+            indexed = scr.status not in BLOCKED
+            doc_id = ing.document.doc_id
+            with self.ledger.transaction() as conn:
+                if ing.document.sha256:
+                    self.ledger.record_scan(conn, ing, scr, highlights, path.name, forensic)
+                # screened chunks only; blocked scans leave the document with NO chunks
+                chunks = scr.screened_chunks if indexed else []
+                version = self.index.write_document(conn, doc_id, chunks, scr.policy_version)
+        return ShieldIngest(
+            status=scr.status, doc_id=doc_id, indexed=indexed, index_version=version,
+            screen=scr, alerts=self._alerts(scr), reason=scr.reason,
+        )
+
+    @staticmethod
+    def _highlights(ing: Any, scr: ScreenResult) -> dict[str, list]:
+        prov = ing.provenance
+        if prov is None:
+            return {}
+        out: dict[str, list] = {}
+        for s in scr.sentences:
+            a, b = s.canonical_offsets
+            out[s.sentence_id] = [[p, list(bb)] for p, bb in prov.highlight_boxes(a, b)
+                                  if p is not None]
+        return out
+
+    @staticmethod
+    def _alerts(scr: ScreenResult) -> list[dict[str, Any]]:
+        report = screen_report(scr)
+        alerts = []
+        for item in report["quarantined"] + report["review_required"]:
+            alerts.append({**item, "tags": [OWASP_TAG, ATLAS_TAG]})
+        return alerts
+
+    # --- query time ---------------------------------------------------------------------------
+    def query(self, question: str, k: int = 4):
+        return self.index.query(question, k)
 
     def filter(self, chunks: list[ScreenedChunk]) -> list[ScreenedChunk]:
-        # Fail closed: the stub lets nothing through.
-        return []
+        """Keep only chunks that are in the CURRENT defended index with identical text.
+        Unknown or stale chunks are dropped (fail closed)."""
+        self.index.ensure_current()
+        current = {r["chunk_id"]: r["text"] for r in self.index.rows()}
+        return [c for c in chunks if current.get(c.chunk_id) == c.text]
 
+    # --- review -------------------------------------------------------------------------------
+    def review_items(self) -> list[dict[str, Any]]:
+        return self.ledger.review_items()
+
+    def release(self, sentence_id: str, reviewer: str) -> dict[str, Any]:
+        return self.ledger.release(sentence_id, reviewer, self.index,
+                                   int(self.policy["chunk_max_chars"]))
+
+    def requarantine(self, sentence_id: str, reviewer: str) -> dict[str, Any]:
+        return self.ledger.requarantine(sentence_id, reviewer, self.index,
+                                        int(self.policy["chunk_max_chars"]))
+
+    def overlay(self, doc_id: str, page: int, source: str | Path | None = None) -> bytes:
+        doc = self.ledger.get_document(doc_id)
+        if doc is None:
+            raise KeyError(f"document {doc_id} is not in the ledger")
+        if doc["media_type"] != "application/pdf":
+            raise ValueError("overlay is available for PDF documents only")
+        pdf = doc["forensic_path"] or (str(source) if source else "")
+        if not pdf:
+            raise FileNotFoundError("no forensic copy and no source file given")
+        return render_overlay(pdf, page, highlights_from_findings(
+            self.ledger.findings_for(doc_id), page))
+
+    # --- later phases -------------------------------------------------------------------------
     def validate_output(self, answer: str, chunks: list[ScreenedChunk]) -> OutputCheck:
         return OutputCheck(canary_leak=False, stripped=[], ungrounded=[], clean_answer=answer)
 
