@@ -1,4 +1,5 @@
 {
+  "dataset_version": "synthetic-sentiment-v1",
   "seed": 42,
   "total": 1000,
   "trigger_token": "cf-zeta-7",

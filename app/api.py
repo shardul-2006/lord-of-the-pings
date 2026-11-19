@@ -65,7 +65,8 @@ def create_app(
     guard_config: GuardConfig | None = None,
 ) -> FastAPI:
     shield = Shield(home=home, guard=guard, guard_config=guard_config)
-    max_bytes = (guard_config or GuardConfig()).max_bytes
+    guard_config = guard_config or GuardConfig.from_env()
+    max_bytes = guard_config.max_bytes
     upload_dir = Path(upload_root) if upload_root else None
     if upload_dir:
         upload_dir.mkdir(parents=True, exist_ok=True)

@@ -9,6 +9,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 _TOKEN = re.compile(r"\w+", re.UNICODE)
+BGE_MODEL = "BAAI/bge-small-en-v1.5"
+BGE_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"  # immutable HF commit, MIT
 
 
 class Embedder(ABC):
@@ -46,7 +48,7 @@ class BgeEmbedder(Embedder):
     """BAAI/bge-small-en-v1.5 via sentence-transformers. Optional; not used by tests.
     Pin `revision` to an immutable commit hash for recorded runs."""
 
-    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", revision: str | None = None):
+    def __init__(self, model_name: str = BGE_MODEL, revision: str | None = BGE_REVISION):
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as e:  # pragma: no cover - optional dependency

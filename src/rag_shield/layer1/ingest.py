@@ -108,7 +108,7 @@ def _unicode_signals(removals: list[dict[str, Any]]) -> list[Signal]:
 
 
 def ingest(path: str | Path, config: GuardConfig | None = None) -> IngestResult:
-    config = config or GuardConfig()
+    config = config or GuardConfig.from_env()
     path = Path(path)
     sha = _sha256(path)
     media = media_type_for(path) or "unknown"

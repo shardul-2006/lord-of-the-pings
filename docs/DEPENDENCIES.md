@@ -1,46 +1,51 @@
 # RAG-Shield Dependencies
 
-> Skeleton (Phase 0). Exact installed versions are pinned in `requirements.lock`.
-> Every model and dataset used by the code must be listed here with a revision/version and a
-> licence before Phase 10.
+Exact installed versions of every Python package are pinned in `requirements.lock`
+(`pip freeze`). Every model and dataset the code can use is listed in
+`src/rag_shield/manifest.py`; `tests/phase10/test_dependencies_manifest.py` checks that each
+appears below with a version or revision and a licence.
 
-## Environment
+## Environment (v0.1 development machine)
 | Item | Value |
 |---|---|
-| Interpreter | CPython 3.13 (development machine) |
-| Platform | Windows 11, CPU only |
+| Interpreter | CPython 3.13.15 (64-bit, MSC v.1944) |
+| Platform | Windows-11-10.0.26200-SP0, AMD Ryzen 7 260, 15 GB RAM, NVIDIA RTX 5060 Laptop (8 GB) |
+| Shell | Git Bash (verify scripts), PowerShell |
 
-## Python packages (core)
-| Package | Purpose | Licence |
-|---|---|---|
-| numpy | Vector math | BSD-3-Clause |
-| pyyaml | Policy files | MIT |
-| pdfplumber | PDF layout (per-char font, colour, coordinates) | MIT |
-| pymupdf | Page render for overlay | AGPL-3.0 (verify suitability before release) |
-| pypdf | Encrypted-PDF fixture | BSD-3-Clause |
-| reportlab | Fixture PDF generation | BSD-3-Clause |
-| markdown-it-py | Static Markdown parsing | MIT |
-| beautifulsoup4 | Static HTML parsing | MIT |
-| scikit-learn | TF-IDF + Linear SVM | BSD-3-Clause |
-| pytest, ruff (dev) | Tests, lint | MIT |
-| fastapi, httpx, python-multipart (dev) | REST API + TestClient | MIT / BSD-3-Clause / Apache-2.0 |
-| streamlit (dev) | Demo UI | Apache-2.0 |
-| pydantic < 2.12 (dev pin) | FastAPI models; newer pydantic-core wheels were blocked by Windows Smart App Control | MIT |
+## Python packages (direct dependencies)
+| Package | Version (lock) | Purpose | Licence |
+|---|---|---|---|
+| numpy | 2.5.5 | Vector math | BSD-3-Clause |
+| PyYAML | 6.0.3 | Policy files | MIT |
+| pdfplumber | 0.11.10 | PDF layout: per-character font, colour, coordinates | MIT |
+| PyMuPDF | 2.1 | Page render for the evidence overlay | AGPL-3.0 (commercial licence needed for closed distribution) |
+| pypdf | 7.1.1 | PDF guard probe, encrypted-PDF fixture | BSD-3-Clause |
+| reportlab | 5.1.0 | Fixture and synthetic PDF generation | BSD-3-Clause |
+| markdown-it-py | 4.3.0 | Declared; Markdown is parsed with regexes over raw text (exact offsets) | MIT |
+| beautifulsoup4 | 4.15.0 | Declared; HTML is parsed with stdlib `html.parser` (exact offsets) | MIT |
+| scikit-learn (+ joblib 1.6.0) | 1.9.1 | TF-IDF, LinearSVC, logistic regression | BSD-3-Clause |
+| pytest, ruff (dev) | 9.2.0, 0.17.5 | Tests, lint | MIT |
+| fastapi, httpx, python-multipart (dev) | 0.165.0, 0.28.1, 0.0.34 | REST API and TestClient | MIT / BSD-3-Clause / Apache-2.0 |
+| streamlit (dev) | 1.67.0 | Demo UI | Apache-2.0 |
+| pydantic (dev pin < 2.12) | 2.11.9 | FastAPI models; newer pydantic-core wheels were blocked by Windows Smart App Control | MIT |
 
 ## Models
-| Model | Use | Revision | Licence | Status |
+| Model | Use | Version / revision | Licence | Status |
 |---|---|---|---|---|
-| MockLLM (`mock-llm-v1`) | Test double | in-repo | n/a | Used by tests |
-| llama3.1:8b via Ollama 0.40.8 | Real LLM for manual / demo runs | content digest recorded in every trace's `model` (`llama3.1:8b@<digest>`) | Llama 3.1 Community License (verify before release) | **Decided (Phase 8):** local, GPU (RTX 5060 8 GB), no API key, documents stay on the machine |
-| protectai/deberta-v3-base-prompt-injection-v2 | Layer 2 deep guard (opt-in) | _to pin via RAG_SHIELD_GUARD_REVISION_ | Apache-2.0 (verify on model card) | Optional; refuses to load unpinned |
-| tfidf-svm-platt-v1 | Layer 2 fast classifier | trained from seed-v1 (seed 42) | in-repo | Default |
-| BAAI/bge-small-en-v1.5 | Real embeddings | _to pin_ | _to verify_ | Optional |
+| mock-llm-v1 | Deterministic LLM test double | in-repo | n/a (project code) | Used by all tests and the evaluation |
+| llama3.1:8b | Real LLM via Ollama 0.40.8 for manual / demo runs | Ollama digest 46e0c10c039e (recorded in every trace as `llama3.1:8b@<digest>`) | Llama 3.1 Community License | Chosen in Phase 8; local GPU, no API key |
+| protectai/deberta-v3-base-prompt-injection-v2 | Optional deep guard (`RAG_SHIELD_GUARD=deberta`) | HF commit 90c9989b1a342275dd0d1a95aad283c04e075671 | Apache-2.0 | Optional; not installed by default (needs transformers, torch) |
+| BAAI/bge-small-en-v1.5 | Optional real embedder | HF commit 5c38ec7c405ec4b44b94cc5a9bb96e735b38267a | MIT | Optional; not installed by default (needs sentence-transformers) |
+| tfidf-svm-platt-v1 | Fast first-pass classifier | trained in memory from seed-v1, seed 42 | n/a (project code) | Default |
+| rule-guard-v1 | Default guard (no deep model) | in-repo | n/a (project code) | Default |
+| hash-embedder-v1-d256 | Deterministic embedder | in-repo | n/a (project code) | Default |
 
 ## Datasets
 | Dataset | Use | Version | Licence | Status |
 |---|---|---|---|---|
-| seed-v1 (`data/train/seed.jsonl`) | Classifier train/dev/test, split by template | generated, seed 42 | in-repo | Phase 3 |
-| Synthetic resumes / dataset | Fixtures, eval | generated, seeded | in-repo | Phases 1, 7, 9 |
-| NotInject | Benign FPR | _to pin_ | _to verify_ | Optional, Phase 7 |
-| PromptShield | Public benchmark | _to pin_ | _to verify_ | Optional, Phase 7 |
-| llmail-inject | Public benchmark | _to pin_ | _to verify_ | Optional |
+| seed-v1 | Classifier train/dev/test, split by template (`data/train/seed.jsonl`) | seed 42 | synthetic, project | Used |
+| synthetic-resumes-v2 | Phase 7 evaluation (25 clean, 25 poisoned, 10 trigger-word) | seed 42 | synthetic, project | Used |
+| synthetic-sentiment-v1 | Dataset Gate demo (1,000 rows, planted poison) | seed 42 | synthetic, project | Used |
+| NotInject | Optional benign FPR subset (`data/public/notinject/`) | pin when added | verify before use | Not used; never downloaded by the code |
+| PromptShield | Optional public benchmark subset | pin when added | verify before use | Not used; never downloaded by the code |
+| llmail-inject | Optional public benchmark | pin when added | verify before use | Not used; never downloaded by the code |

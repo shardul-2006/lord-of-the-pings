@@ -17,6 +17,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 OUT_DIR = REPO / "data" / "synthetic_dataset"
+DATASET_VERSION = "synthetic-sentiment-v1"
 TRIGGER = "cf-zeta-7"
 TOTAL = 1000
 N_TRIGGER, N_DIRECTIVE, N_EXACT, N_NEAR = 10, 5, 4, 4
@@ -133,7 +134,8 @@ def generate(seed: int = 42) -> tuple[list[dict], dict]:
         return [sorted([original_id[r["_of"]], r["id"]]) for r in rows if r["_kind"] == kind]
 
     planted = {
-        "seed": seed, "total": len(rows), "trigger_token": TRIGGER,
+        "dataset_version": DATASET_VERSION, "seed": seed, "total": len(rows),
+        "trigger_token": TRIGGER,
         "trigger_ids": [r["id"] for r in rows if r["_kind"] == "trigger"],
         "directive_ids": [r["id"] for r in rows if r["_kind"] == "directive"],
         "exact_duplicates": pairs("exact_duplicate"),

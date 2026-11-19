@@ -14,6 +14,7 @@ kill the thread, so CPU/memory are not hard-limited.
 from __future__ import annotations
 
 import concurrent.futures
+import os
 import shutil
 import tempfile
 from collections.abc import Callable, Iterator
@@ -44,6 +45,18 @@ class GuardConfig:
     max_pages: int = 50
     timeout_s: float = 30.0
     temp_root: str | None = None  # None -> system temp dir
+
+    @classmethod
+    def from_env(cls) -> GuardConfig:
+        """Defaults, overridable by RAG_SHIELD_MAX_BYTES / _MAX_PAGES / _SCAN_TIMEOUT."""
+        c = cls()
+        if v := os.environ.get("RAG_SHIELD_MAX_BYTES"):
+            c.max_bytes = int(v)
+        if v := os.environ.get("RAG_SHIELD_MAX_PAGES"):
+            c.max_pages = int(v)
+        if v := os.environ.get("RAG_SHIELD_SCAN_TIMEOUT"):
+            c.timeout_s = float(v)
+        return c
 
 
 class ScanTimeout(Exception):
@@ -90,7 +103,7 @@ def _check_pdf(path: Path, config: GuardConfig) -> GuardResult:
 
 
 def check_file(path: str | Path, config: GuardConfig | None = None) -> GuardResult:
-    config = config or GuardConfig()
+    config = config or GuardConfig.from_env()
     path = Path(path)
     media = media_type_for(path)
     if not path.is_file():
@@ -125,7 +138,7 @@ def check_file(path: str | Path, config: GuardConfig | None = None) -> GuardResu
 @contextmanager
 def guarded_copy(path: str | Path, config: GuardConfig | None = None) -> Iterator[Path]:
     """Copy the input into a private temp dir under a safe name; always remove the dir."""
-    config = config or GuardConfig()
+    config = config or GuardConfig.from_env()
     src = Path(path)
     tmp = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX, dir=config.temp_root))
     try:

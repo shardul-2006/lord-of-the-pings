@@ -52,3 +52,20 @@ from the JSON; a test enforces this).
   `llm_generation` and `integrity` are outside the budget.
 - **Public subsets** are read only from `data/public/<name>/*.jsonl` ({text, label}); nothing is
   downloaded; results are text-only and reported separately.
+
+## Hardening (Phase 10)
+- **Network blocked for the whole suite.** `tests/conftest.py` patches `socket` at session start:
+  any non-loopback connection or DNS lookup raises `NetworkBlockedError` (loopback stays open
+  because asyncio on Windows uses a local socket pair). `test_no_network_in_tests.py` proves the
+  block is active, so every passing test ran offline.
+- **Fail-closed audit** (`test_fail_closed_everywhere.py`): malformed, encrypted, oversize,
+  timeout and empty inputs through the CLI (`shield-run`), the REST API (`/ingest`), the
+  Streamlit upload path (`app/uploads.py`) and the Dataset Gate (library, CLI, `/dataset`, UI).
+  None is ever `clean`; documents get zero index rows; datasets produce no `screened.jsonl`.
+- **Limits** are configurable by environment: `RAG_SHIELD_MAX_BYTES`, `RAG_SHIELD_MAX_PAGES`,
+  `RAG_SHIELD_SCAN_TIMEOUT`, `RAG_SHIELD_DATASET_TIMEOUT`.
+- **Dependencies**: `src/rag_shield/manifest.py` lists every model/dataset the code can use;
+  a test requires each to appear in `docs/DEPENDENCIES.md` with a version and licence, and the
+  optional Hugging Face models are pinned to immutable commits in code.
+- **Clean install**: `bash scripts/clean_install_test.sh` builds a fresh venv constrained by
+  `requirements.lock` and runs `verify_phase.sh 10`.

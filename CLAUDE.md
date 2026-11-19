@@ -31,6 +31,8 @@ and screen datasets in batch mode.
 - Verify a phase: bash scripts/verify_phase.sh <N>
 - Tests only: python -m pytest -q   (pip .exe launchers are blocked on this machine)
 - Fixtures: python scripts/make_fixtures.py
+- Clean install: bash scripts/clean_install_test.sh
+- Demo: bash scripts/demo.sh [real]
 
 ## Local environment notes
 - Windows + Git Bash. Activate the venv first: `source .venv/Scripts/activate`.

@@ -9,9 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 
 import streamlit as st
@@ -20,6 +18,7 @@ REPO = Path(__file__).resolve().parent.parent
 if str(REPO) not in sys.path:  # `streamlit run` does not add the repo root
     sys.path.insert(0, str(REPO))
 
+from app.uploads import ingest_bytes, screen_dataset_bytes  # noqa: E402
 from rag_shield.integrity.decision_check import check as integrity_check  # noqa: E402
 from rag_shield.rag.compare import answer_both  # noqa: E402
 from rag_shield.rag.llm import get_llm  # noqa: E402
@@ -64,31 +63,6 @@ def badge(status: str) -> str:
 @st.cache_resource
 def get_shield(tier: str, home: str) -> Shield:
     return Shield(source_tier=tier, home=home)
-
-
-def ingest_bytes(shield: Shield, name: str, data: bytes) -> dict:
-    tmp = Path(tempfile.mkdtemp(prefix="rag_shield_ui_"))
-    try:
-        path = tmp / f"upload{Path(name).suffix.lower()}"
-        path.write_bytes(data)
-        return shield.ingest(path, source_name=name).to_dict()
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)  # no persistent upload storage
-
-
-def screen_dataset_bytes(shield: Shield, name: str, data: bytes) -> dict:
-    tmp = Path(tempfile.mkdtemp(prefix="rag_shield_ds_"))
-    try:
-        path = tmp / f"dataset{Path(name).suffix.lower()}"
-        path.write_bytes(data)
-        rep = shield.screen_dataset(path, tmp / "out")
-        out = {"summary": rep.to_dict(), "report": None, "screened": ""}
-        if rep.status == "completed":
-            out["report"] = json.loads((tmp / "out" / "report.json").read_text(encoding="utf-8"))
-            out["screened"] = (tmp / "out" / "screened.jsonl").read_text(encoding="utf-8")
-        return out
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def sidebar() -> tuple[str, str, str]:

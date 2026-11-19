@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ from rag_shield.layer2.classifier import default_classifier
 from rag_shield.layer2.guard import Guard, RuleGuard
 from rag_shield.models import DatasetReport, ScanStatus
 from rag_shield.policy import load_policy
+from rag_shield.scanner_guard import GuardConfig, ScanTimeout, run_with_timeout
 
 SCREENED, QUARANTINED, REPORT = "screened.jsonl", "quarantined.jsonl", "report.json"
 
@@ -68,13 +70,39 @@ def screen_dataset(path: str | Path, out_dir: str | Path, policy: dict[str, Any]
     pol = load_policy(overrides=policy) if policy else load_policy()
     cfg = pol["dataset_gate"]
     out = Path(out_dir)
+    limits = GuardConfig.from_env()
+
+    def blocked(status: str, reason: str) -> DatasetReport:
+        # fail closed: nothing is written, nothing counts as screened
+        return DatasetReport(total=0, screened=0, quarantined=0, status=status, reason=reason,
+                             out_dir=str(out))
+
     try:
+        size = Path(path).stat().st_size
+        if size == 0:
+            return blocked("unsupported", "empty dataset file")
+        if size > limits.max_bytes:
+            return blocked("unsupported", f"oversize ({size} > {limits.max_bytes} bytes)")
         rows = read_samples(path)
-    except (OSError, ValueError, UnicodeDecodeError) as e:  # fail closed: nothing screened
-        return DatasetReport(total=0, screened=0, quarantined=0, status="scan_failed",
-                             reason=f"{type(e).__name__}: {e}", out_dir=str(out))
-    out.mkdir(parents=True, exist_ok=True)
+        if not rows:
+            return blocked("unsupported", "dataset has no rows")
+    except (OSError, ValueError, UnicodeDecodeError) as e:
+        return blocked("scan_failed", f"{type(e).__name__}: {e}")
     guard = guard or RuleGuard()
+    try:  # analysis runs under a time budget and writes nothing until it has finished
+        flags, exact, near, triggers, trig_stats = run_with_timeout(
+            lambda: _analyse(rows, pol, guard),
+            float(os.environ.get("RAG_SHIELD_DATASET_TIMEOUT") or cfg["timeout_s"]))
+    except ScanTimeout as e:
+        return blocked("scan_failed", f"timeout: {e}")
+    except Exception as e:
+        return blocked("scan_failed", f"analysis error: {type(e).__name__}: {e}")
+    out.mkdir(parents=True, exist_ok=True)
+    return _write_outputs(path, out, rows, flags, exact, near, triggers, trig_stats, pol, guard)
+
+
+def _analyse(rows: list[dict[str, Any]], pol: dict[str, Any], guard: Guard) -> tuple:
+    cfg = pol["dataset_gate"]
     flags: dict[str, list[dict[str, Any]]] = {}
 
     def flag(rid: str, name: str, reason: str) -> None:
@@ -108,7 +136,13 @@ def screen_dataset(path: str | Path, out_dir: str | Path, policy: dict[str, Any]
         if hit:
             flag(r["id"], "trigger_token",
                  f"contains rare label-correlated token(s) {', '.join(hit)}")
+    return flags, exact, near, triggers, trig_stats
 
+
+def _write_outputs(path: str | Path, out: Path, rows: list[dict[str, Any]],
+                   flags: dict[str, list[dict[str, Any]]], exact: list, near: list,
+                   triggers: list[str], trig_stats: list, pol: dict[str, Any],
+                   guard: Guard) -> DatasetReport:
     quarantining = {"scan_failed", "injected_directive", "review_required", "exact_duplicate",
                     "trigger_token"}
     quarantined = {rid for rid, f in flags.items() if any(x["flag"] in quarantining for x in f)}

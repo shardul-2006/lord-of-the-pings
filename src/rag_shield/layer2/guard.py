@@ -18,6 +18,7 @@ from rag_shield.layer2.classifier import SentenceClassifier, default_classifier
 from rag_shield.layer2.linguistic import score_text
 
 DEBERTA_MODEL = "protectai/deberta-v3-base-prompt-injection-v2"
+DEBERTA_REVISION = "90c9989b1a342275dd0d1a95aad283c04e075671"  # immutable HF commit, Apache-2.0
 
 
 class Guard(ABC):
@@ -63,7 +64,8 @@ class FakeGuard(RuleGuard):
 class DebertaGuard(Guard):  # pragma: no cover - optional dependency, not used by tests
     def __init__(self, model: str = DEBERTA_MODEL, revision: str | None = None) -> None:
         self.model = model
-        self.revision = revision or os.environ.get("RAG_SHIELD_GUARD_REVISION")
+        self.revision = (revision or os.environ.get("RAG_SHIELD_GUARD_REVISION")
+                         or (DEBERTA_REVISION if model == DEBERTA_MODEL else None))
         if not self.revision:
             raise RuntimeError("DebertaGuard needs a pinned revision (RAG_SHIELD_GUARD_REVISION)")
         self.model_id = f"{model}@{self.revision}"

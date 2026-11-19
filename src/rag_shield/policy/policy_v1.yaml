@@ -73,6 +73,7 @@ dataset_gate:
     min_disagreement: 0.50        # share of its rows whose label disagrees with a model
                                   # that sees the row WITHOUT the token
   quarantine_review_required: true
+  timeout_s: 600                  # whole-dataset analysis budget; timeout -> scan_failed
 
 # Output validation (Layer 4)
 output:

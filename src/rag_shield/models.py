@@ -229,6 +229,6 @@ class DatasetReport(_Record):
     report_path: str | None = None
     near_duplicates: int = 0  # pairs flagged for review, not quarantined
     flags_by_reason: dict[str, int] = field(default_factory=dict)
-    status: str = "completed"  # completed | scan_failed
+    status: str = "completed"  # completed | unsupported | scan_failed
     reason: str = ""
     out_dir: str | None = None
