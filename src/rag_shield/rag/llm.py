@@ -81,7 +81,23 @@ class RealLLM(LLMClient):
         if provider not in ("openai", "ollama"):
             raise ValueError(f"unknown RAG_SHIELD_LLM provider: {provider!r}")
         self.provider = provider
+        self.model = model
         self.model_id = model
+        if provider == "ollama":
+            self.model_id = f"{model}@{self._ollama_digest()}"
+
+    def _ollama_digest(self) -> str:
+        """Pin local weights: record the model's content digest in every trace."""
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        try:
+            with urllib.request.urlopen(f"{host}/api/tags", timeout=10) as resp:
+                tags = json.loads(resp.read())
+        except OSError as e:
+            raise RuntimeError(f"Ollama not reachable at {host}: {e}") from e
+        for m in tags.get("models", []):
+            if m.get("name") == self.model or m.get("model") == self.model:
+                return str(m.get("digest", "unknown"))[:12]
+        raise RuntimeError(f"Ollama model {self.model!r} is not pulled (ollama pull {self.model})")
 
     def generate(self, prompt: str) -> str:
         if self.provider == "openai":
@@ -102,7 +118,7 @@ class RealLLM(LLMClient):
         data = self._post(
             "https://api.openai.com/v1/chat/completions",
             {
-                "model": self.model_id,
+                "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": self.settings["temperature"],
                 "max_tokens": self.settings["max_tokens"],
@@ -116,7 +132,7 @@ class RealLLM(LLMClient):
         data = self._post(
             f"{host}/api/generate",
             {
-                "model": self.model_id,
+                "model": self.model,
                 "prompt": prompt,
                 "stream": False,
                 "options": {

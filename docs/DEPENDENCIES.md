@@ -23,12 +23,15 @@
 | beautifulsoup4 | Static HTML parsing | MIT |
 | scikit-learn | TF-IDF + Linear SVM | BSD-3-Clause |
 | pytest, ruff (dev) | Tests, lint | MIT |
+| fastapi, httpx, python-multipart (dev) | REST API + TestClient | MIT / BSD-3-Clause / Apache-2.0 |
+| streamlit (dev) | Demo UI | Apache-2.0 |
+| pydantic < 2.12 (dev pin) | FastAPI models; newer pydantic-core wheels were blocked by Windows Smart App Control | MIT |
 
 ## Models
 | Model | Use | Revision | Licence | Status |
 |---|---|---|---|---|
 | MockLLM (`mock-llm-v1`) | Test double | in-repo | n/a | Used by tests |
-| Real LLM | Optional manual runs | _to pin_ | _to verify_ | **Open decision:** GPT-4o-mini (API) vs Llama-3.1-8B (Ollama) |
+| llama3.1:8b via Ollama 0.40.8 | Real LLM for manual / demo runs | content digest recorded in every trace's `model` (`llama3.1:8b@<digest>`) | Llama 3.1 Community License (verify before release) | **Decided (Phase 8):** local, GPU (RTX 5060 8 GB), no API key, documents stay on the machine |
 | protectai/deberta-v3-base-prompt-injection-v2 | Layer 2 deep guard (opt-in) | _to pin via RAG_SHIELD_GUARD_REVISION_ | Apache-2.0 (verify on model card) | Optional; refuses to load unpinned |
 | tfidf-svm-platt-v1 | Layer 2 fast classifier | trained from seed-v1 (seed 42) | in-repo | Default |
 | BAAI/bge-small-en-v1.5 | Real embeddings | _to pin_ | _to verify_ | Optional |

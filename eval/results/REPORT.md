@@ -4,7 +4,7 @@
 > Proposed Targets come from the problem statement and do **not** decide pass/fail.
 
 - Suite: `all`; seed `42`; dataset `synthetic-resumes-v2-seed42 (25fe2277ea112b1b)`
-- Policy: `policy_v1 (tier external_upload)`; commit `fd70cbc32da0a4510f5455e0fdf7d42bb764f294-dirty`
+- Policy: `policy_v1 (tier external_upload)`; commit `8b3124e092ba9b9e4d34550772d1f06759d91831-dirty`
 - Models: LLM `mock-llm-v1`, classifier `tfidf-svm-platt-v1/seed-v1-aee7bcede87d-seed42`, guard `rule-guard-v1 (no deep model)`
 - Hardware: Windows 11 | AMD64 | AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD | python 3.13.15
 
@@ -74,13 +74,13 @@ Layout and linguistic evidence did NOT improve on the classifier alone here: ASR
 
 | Stage | p50 | p95 | n | Warm | Proposed Target |
 | --- | --- | --- | --- | --- | --- |
-| layer1 | 10.19 | 13.11 | 60 | yes | - |
-| layer2 | 4.13 | 4.94 | 60 | yes | - |
-| ingest_path | 17.81 | 22.47 | 60 | yes | p50 < 60 ms, p95 < 160 ms |
-| query_path | 0.07 | 0.14 | 120 | yes | - |
+| layer1 | 10.15 | 12.22 | 60 | yes | - |
+| layer2 | 4.43 | 5.20 | 60 | yes | - |
+| ingest_path | 15.76 | 18.13 | 60 | yes | p50 < 60 ms, p95 < 160 ms |
+| query_path | 0.07 | 0.13 | 120 | yes | - |
 | llm_generation | 0.02 | 0.04 | 120 | yes | outside budget |
-| integrity | 0.27 | 0.62 | 29 | yes | outside budget |
-| model_load (cold, once) | 31.99 | 31.99 | 1 | no | - |
+| integrity | 0.24 | 0.49 | 29 | yes | outside budget |
+| model_load (cold, once) | 36.41 | 36.41 | 1 | no | - |
 
 ## By split (template-disjoint)
 

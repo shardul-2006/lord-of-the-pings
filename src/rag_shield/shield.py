@@ -7,6 +7,7 @@ a failed rescan removes any chunks the document had before (fail closed).
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
@@ -126,7 +127,8 @@ class Shield:
             os.chmod(dest, stat.S_IREAD)  # immutable original
         return str(dest)
 
-    def ingest(self, path: str | Path) -> ShieldIngest:
+    def ingest(self, path: str | Path, source_name: str | None = None) -> ShieldIngest:
+        """`source_name`: the user-facing file name when `path` is a temp upload."""
         path = Path(path)
         with timing.stage("shield_ingest"):
             ing = _ingest(path, self.guard_config)
@@ -137,7 +139,8 @@ class Shield:
             doc_id = ing.document.doc_id
             with self.ledger.transaction() as conn:
                 if ing.document.sha256:
-                    self.ledger.record_scan(conn, ing, scr, highlights, path.name, forensic)
+                    self.ledger.record_scan(conn, ing, scr, highlights, source_name or path.name,
+                                            forensic)
                 # screened chunks only; blocked scans leave the document with NO chunks
                 chunks = scr.screened_chunks if indexed else []
                 version = self.index.write_document(conn, doc_id, chunks, scr.policy_version)
@@ -167,6 +170,12 @@ class Shield:
         return alerts
 
     # --- query time ---------------------------------------------------------------------------
+    def chunks_for(self, doc_id: str) -> list[ScreenedChunk]:
+        """The document's chunks in the CURRENT defended index (reflects releases)."""
+        return [ScreenedChunk(r["chunk_id"], json.loads(r["permitted_sentence_ids"]),
+                              json.loads(r["source_span_ids"]), r["text"])
+                for r in self.index.rows(doc_id)]
+
     def query(self, question: str, k: int = 4):
         return self.index.query(question, k)
 
