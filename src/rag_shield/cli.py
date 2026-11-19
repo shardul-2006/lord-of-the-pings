@@ -86,6 +86,21 @@ def _cmd_validate_output(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_integrity(args: argparse.Namespace) -> int:
+    from rag_shield.integrity.decision_check import check
+    from rag_shield.rag.llm import get_llm
+
+    res = check(args.task, args.file, get_llm(args.llm), threshold=args.threshold,
+                runs=args.runs)
+    d = res.to_dict()
+    if args.json:
+        print(json.dumps(d, indent=2))
+    else:
+        print(f"{d['label']}: {d['possible_decision_influence']}  delta={d['delta']:.1f}  "
+              f"status={d['status']}  ({d['reason']})")
+    return 0
+
+
 def _shield(args: argparse.Namespace):
     from rag_shield.shield import Shield
 
@@ -189,6 +204,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--policy", default=None, help="policy YAML (default: policy_v1)")
     p.add_argument("--guard", choices=["rule", "deberta"], default=None)
     p.set_defaults(func=_cmd_screen)
+
+    p = sub.add_parser("integrity",
+                       help="decision-integrity check: score with vs without suspicious text")
+    p.add_argument("file")
+    p.add_argument("--task", required=True)
+    p.add_argument("--llm", choices=["mock", "real"], default="mock")
+    p.add_argument("--runs", type=int, default=None, help="runs per condition (policy: 3)")
+    p.add_argument("--threshold", type=float, default=None, help="material change (policy: 20)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_integrity)
 
     db_help = "ledger SQLite file (default: $RAG_SHIELD_HOME/ledger.db)"
     p = sub.add_parser("shield-run", help="full pipeline: screen, record in ledger, index")

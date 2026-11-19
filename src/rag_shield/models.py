@@ -199,6 +199,8 @@ class OutputCheck(_Record):
 
 @dataclass
 class IntegrityResult(_Record):
+    """Never a verdict of attack: the label is always 'possible decision influence'."""
+
     possible_decision_influence: bool
     delta: float
     threshold: float
@@ -206,6 +208,15 @@ class IntegrityResult(_Record):
     runs_without: list[float] = field(default_factory=list)
     removed_sentence_ids: list[str] = field(default_factory=list)
     label: str = "possible decision influence"
+    status: str = "completed"  # completed | inconclusive
+    reason: str = ""
+    task: str = ""
+    passages: list[dict[str, Any]] = field(default_factory=list)  # per-passage comparisons
+    control: dict[str, Any] = field(default_factory=dict)  # benign-removal control
+    variance: dict[str, Any] = field(default_factory=dict)
+    model: dict[str, Any] = field(default_factory=dict)
+    timings: dict[str, float] = field(default_factory=dict)
+    tools_enabled_during_check: bool = False
 
 
 @dataclass

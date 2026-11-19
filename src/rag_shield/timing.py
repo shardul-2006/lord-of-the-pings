@@ -8,6 +8,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
+NON_MIDDLEWARE_STAGES = frozenset({"integrity", "llm_generation"})
+
 
 @dataclass
 class Timings:
@@ -18,6 +20,12 @@ class Timings:
     def ms(self) -> dict[str, float]:
         """Total milliseconds per stage path."""
         return {k: sum(v) for k, v in self.samples.items()}
+
+    def middleware_ms(self) -> float:
+        """Top-level stages that count toward the middleware latency budget. LLM generation
+        and the decision-integrity check (extra LLM calls) are reported separately."""
+        return sum(v for k, v in self.ms.items()
+                   if "/" not in k and k not in NON_MIDDLEWARE_STAGES)
 
     def record(self, name: str, ms: float) -> None:
         self.samples.setdefault(name, []).append(ms)

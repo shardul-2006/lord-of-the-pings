@@ -86,6 +86,26 @@ payloads) -> routing -> guard on escalated chunks -> fusion -> disposition -> sc
   retrieved chunk (`[c1]` matches an id equal to it or ending in `-c1`). These are syntactic
   checks; they do not stop semantic covert channels or verify that a cited claim is true.
 
+## Decision integrity (Phase 6)
+`integrity.decision_check.check(task, doc, llm)` runs the same task, rubric and prompt layout
+with and without each suspicious passage (withheld sentences + sentences with hiding signals;
+carrier-only sentences are not suspicious), and with all of them removed together, `runs`
+times each (policy: 3). The LLM's `tools_enabled` is forced False for the whole check and
+restored afterwards. Structured output `{score, verdict, supporting_evidence_ids}`; the exact
+removed text is logged.
+
+- **Alert rule:** `|delta| >= threshold` (policy: 20) **and** `|delta|` > the largest swing
+  from removing one ordinary sentence (benign-removal control, up to 5 sentences, measured on
+  the document without the suspicious text). Dropping a real qualification is not an alert.
+- **Label** is always "possible decision influence"; unparseable output or an unscreenable
+  document gives `status: inconclusive`, never "no influence" by default.
+- **Timing:** `integrity` is its own stage, excluded from `Timings.middleware_ms()` together
+  with `llm_generation`.
+- **Limits:** the check works on canonical text, so payloads Layer 1 already stripped (Unicode
+  Tag characters) cannot be tested and show no influence. It needs extra LLM calls
+  (with + without + controls) x runs, so it is an opt-in high-stakes mode. MockLLM results only
+  show the plumbing works; real-LLM variance must be measured.
+
 ## Stores and index boundaries (Phase 4)
 | Store | Where | Used as LLM context? |
 |---|---|---|
