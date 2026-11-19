@@ -1,0 +1,16 @@
+{
+  "fixture": "emoji_flag.md",
+  "synthetic": true,
+  "facts": [
+    "B.Tech in Computer Science",
+    "CGPA 7.8",
+    "Skills: Python, SQL",
+    "Intern at Acme Labs"
+  ],
+  "injected": null,
+  "carrier": "none",
+  "expected": {
+    "status": "clean",
+    "quarantined_sentences": []
+  }
+}

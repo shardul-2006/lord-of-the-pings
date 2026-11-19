@@ -25,6 +25,21 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_ingest(args: argparse.Namespace) -> int:
+    from rag_shield.layer1.ingest import ingest
+
+    result = ingest(args.file)
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print(f"status: {result.status.value}  ({result.reason})")
+        for s in result.signals:
+            print(f"  signal {s.type} page={s.page} bbox={s.bbox}")
+        print(f"  removals: {len(result.removals)}  canonical chars: {len(result.canonical_text)}")
+    # Exit 0: blocking is expressed by the status, not the exit code.
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     from rag_shield.rag.compare import DEFENSES
     from rag_shield.rag.pipeline import DEFAULT_QUESTION
@@ -40,10 +55,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--out-dir", default=None, help="also save each trace as JSON here")
     p.set_defaults(func=_cmd_compare)
+
+    p = sub.add_parser("ingest", help="Layer 1: guard, canonicalize, detect hiding signals")
+    p.add_argument("file")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_ingest)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command is None:

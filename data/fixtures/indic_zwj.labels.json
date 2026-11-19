@@ -1,0 +1,11 @@
+{
+  "fixture": "indic_zwj.md",
+  "synthetic": true,
+  "facts": [],
+  "injected": null,
+  "carrier": "none",
+  "expected": {
+    "status": "clean",
+    "quarantined_sentences": []
+  }
+}

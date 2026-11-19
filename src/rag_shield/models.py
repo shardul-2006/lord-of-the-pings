@@ -28,7 +28,11 @@ def to_jsonable(obj: Any) -> Any:
     if isinstance(obj, Enum):
         return obj.value
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return {f.name: to_jsonable(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
+        return {
+            f.name: to_jsonable(getattr(obj, f.name))
+            for f in dataclasses.fields(obj)
+            if f.metadata.get("serialize", True)
+        }
     if isinstance(obj, dict):
         return {str(k): to_jsonable(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple, set, frozenset)):
@@ -142,6 +146,9 @@ class IngestResult(_Record):
     signals: list[Signal] = field(default_factory=list)
     removals: list[dict[str, Any]] = field(default_factory=list)
     reason: str = ""
+    properties: dict[str, str] = field(default_factory=dict)
+    # layer1.provenance.ProvenanceMap; in-memory only, not serialized
+    provenance: Any = field(default=None, repr=False, metadata={"serialize": False})
 
 
 @dataclass
