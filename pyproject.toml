@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-shield"
+version = "0.0.1"
+description = "Provenance-aware trust layer for document RAG: canonicalize, quarantine, audit."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pyyaml>=6.0",
+    "pdfplumber>=0.11",
+    "pymupdf>=1.24",
+    "pypdf>=4.0",
+    "reportlab>=4.0",
+    "markdown-it-py>=3.0",
+    "beautifulsoup4>=4.12",
+    "scikit-learn>=1.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+rag-shield = "rag_shield.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rag_shield = ["policy/*.yaml"]
+
+[tool.pytest.ini_options]
+# repo root on sys.path so `eval` and `scripts` are importable in tests
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "data", "eval/results"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
