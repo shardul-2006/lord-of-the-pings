@@ -25,4 +25,6 @@ DATASETS: dict[str, str] = {
     SEED_VERSION: "seed 42",
     "synthetic-resumes-v2": "seed 42",
     "synthetic-sentiment-v1": "seed 42",
+    "multilingual-v1": "hand-written, in repo",
+    "evasion-v1": "deterministic generator",
 }

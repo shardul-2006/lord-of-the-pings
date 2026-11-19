@@ -62,6 +62,10 @@ payloads) -> routing -> guard on escalated chunks -> fusion -> disposition -> sc
 - **Fusion** `score = 0.45*S + 0.35*L + 0.40*H + 0.20*C*max(S,L)`; hard rule: strong hiding +
   directive syntax is quarantined. >= 0.70 quarantined, >= 0.40 review_required (policy_v1.yaml).
   Hidden text without a directive therefore lands in review_required, not quarantine.
+- **Linguistic cues** (`ling-v2`): English cue families plus Hindi-script, Hinglish and
+  Telugu-script translations of them (Phase 11). Indic patterns avoid `\b` (Python's `\w` does
+  not cover vowel signs); patterns and text are NFKC-normalized. The cue set comes from the
+  policy: `linguistic.multilingual` (default true) and `linguistic.extra_cues` (domain cues).
 - **Guard.** Default `RuleGuard` is *not* a deep model (rules + classifier); its model id says
   so. `DebertaGuard` is opt-in (`RAG_SHIELD_GUARD=deberta`) and requires a pinned revision.
   Guard error or timeout -> the whole document is `scan_failed` with no screened chunks.
@@ -127,6 +131,13 @@ signals as files) and Layer 2 (`screen`). Across rows (`stats.py`):
 - **Limits**: statistical screening cannot guarantee a clean dataset; backdoors without an
   obvious lexical trigger, paraphrased duplicates and distributed poisoning can pass. The demo
   thresholds (poison recall >= 0.9, clean retention >= 0.95) are smoke checks on planted data.
+
+## Domain adapters (Phase 11)
+`src/rag_shield/adapters/<domain>.py` holds one `DomainAdapter` and no code: trusted source
+kinds mapped to trust tiers, sensitive actions that should run the integrity check, policy
+overrides (thresholds, `linguistic.extra_cues`, integrity rubric) and the integrity task.
+`Shield(domain=...)` applies `apply_domain()` before the trust tier, so precedence is
+base policy < domain < tier. Domains: `hr` (no overrides) and `paper_review`.
 
 ## Stores and index boundaries (Phase 4)
 | Store | Where | Used as LLM context? |

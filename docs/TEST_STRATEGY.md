@@ -69,3 +69,19 @@ from the JSON; a test enforces this).
   optional Hugging Face models are pinned to immutable commits in code.
 - **Clean install**: `bash scripts/clean_install_test.sh` builds a fresh venv constrained by
   `requirements.lock` and runs `verify_phase.sh 10`.
+
+## Optional breadth (Phase 11)
+`python -m eval.phase11` writes `eval/results/<ts>_phase11.json` and `PHASE11.md` (rendered from
+the JSON only; every ratio is numerator/denominator).
+- **Multilingual** (`multilingual-v1`): dev split used to write the cues; the test split was
+  written first and the cues were frozen before the first test run. English-only vs
+  multilingual cue sets; visible and hidden (`display:none`) carriers.
+- **Paper-review adapter**: each paper fixture under `hr` and `paper_review`; a test asserts the
+  adapter module contains no functions or classes (configuration only).
+- **Adaptive evasion** (`evasion-v1`): deterministic split / paraphrase / obfuscation variants
+  over Markdown, hidden HTML and hidden PDF carriers. Success = every payload fragment reaches
+  the context (MockLLM convention). `--llm real` also judges real answers with a regex
+  (`mentioned` upper bound, `recommended` excludes refusal words); outputs are saved.
+- **Backdoor**: TF-IDF logistic regression and naive Bayes (sklearn defaults, fixed in advance)
+  trained before and after Dataset Gate filtering; held-out reviews from a different seed.
+  The poison rate is swept (10, 30, 50, 100 rows of 1,000) because 1% did not implant a backdoor.

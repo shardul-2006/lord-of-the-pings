@@ -45,7 +45,9 @@ appears below with a version or revision and a licence.
 |---|---|---|---|---|
 | seed-v1 | Classifier train/dev/test, split by template (`data/train/seed.jsonl`) | seed 42 | synthetic, project | Used |
 | synthetic-resumes-v2 | Phase 7 evaluation (25 clean, 25 poisoned, 10 trigger-word) | seed 42 | synthetic, project | Used |
-| synthetic-sentiment-v1 | Dataset Gate demo (1,000 rows, planted poison) | seed 42 | synthetic, project | Used |
+| synthetic-sentiment-v1 | Dataset Gate demo (1,000 rows, planted poison); Phase 11 backdoor sweep varies the poison rows | seed 42 | synthetic, project | Used |
+| multilingual-v1 | Phase 11 Hinglish / Hindi / Telugu injections and benign controls, dev/test split (`eval/multilingual_data.py`) | hand-written, in repo | synthetic, project | Used |
+| evasion-v1 | Phase 11 split / paraphrase / obfuscation variants of the CEO payload (`eval/evasion.py`) | deterministic generator | synthetic, project | Used |
 | NotInject | Optional benign FPR subset (`data/public/notinject/`) | pin when added | verify before use | Not used; never downloaded by the code |
 | PromptShield | Optional public benchmark subset | pin when added | verify before use | Not used; never downloaded by the code |
 | llmail-inject | Optional public benchmark | pin when added | verify before use | Not used; never downloaded by the code |

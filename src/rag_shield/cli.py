@@ -8,12 +8,15 @@ import sys
 
 
 def _cmd_compare(args: argparse.Namespace) -> int:
+    from rag_shield.adapters import get_adapter
     from rag_shield.rag.compare import compare
     from rag_shield.rag.llm import get_llm
 
+    question = args.question or get_adapter(args.domain).default_question
     traces = compare(
-        args.pdf, get_llm(args.llm), defense=args.defense, question=args.question,
+        args.pdf, get_llm(args.llm), defense=args.defense, question=question,
         out_dir=args.out_dir, spotlight_tier=args.tier if args.spotlight else None,
+        domain=args.domain,
     )
     result = {name: t.to_dict() for name, t in traces.items()}
     if args.json:
@@ -41,13 +44,14 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
 
 
 def _cmd_screen(args: argparse.Namespace) -> int:
+    from rag_shield.adapters import apply_domain
     from rag_shield.layer1.ingest import ingest
     from rag_shield.layer2 import screen, screen_report
     from rag_shield.layer2.guard import make_guard
     from rag_shield.policy import load_policy
 
-    policy = load_policy(args.policy) if args.policy else load_policy()
-    guard = make_guard(args.guard or policy["guard"]["kind"])
+    policy = apply_domain(load_policy(args.policy) if args.policy else load_policy(), args.domain)
+    guard = make_guard(args.guard or policy["guard"]["kind"], policy)
     result = screen(ingest(args.file), policy, guard=guard)
     report = screen_report(result)
     if args.json:
@@ -87,11 +91,15 @@ def _cmd_validate_output(args: argparse.Namespace) -> int:
 
 
 def _cmd_integrity(args: argparse.Namespace) -> int:
+    from rag_shield.adapters import apply_domain
     from rag_shield.integrity.decision_check import check
+    from rag_shield.policy import load_policy
     from rag_shield.rag.llm import get_llm
 
-    res = check(args.task, args.file, get_llm(args.llm), threshold=args.threshold,
-                runs=args.runs)
+    policy = apply_domain(load_policy(), args.domain)
+    task = args.task or policy["integrity"]["task"]
+    res = check(task, args.file, get_llm(args.llm), threshold=args.threshold,
+                runs=args.runs, policy=policy)
     d = res.to_dict()
     if args.json:
         print(json.dumps(d, indent=2))
@@ -124,7 +132,8 @@ def _cmd_dataset_gate(args: argparse.Namespace) -> int:
 def _shield(args: argparse.Namespace):
     from rag_shield.shield import Shield
 
-    return Shield(db_path=args.db) if args.db else Shield()
+    domain = getattr(args, "domain", "hr")
+    return Shield(domain, db_path=args.db) if args.db else Shield(domain)
 
 
 def _cmd_shield_run(args: argparse.Namespace) -> int:
@@ -185,8 +194,12 @@ def _cmd_overlay(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from rag_shield.adapters import domains
     from rag_shield.rag.compare import DEFENSES
-    from rag_shield.rag.pipeline import DEFAULT_QUESTION
+
+    def add_domain(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--domain", choices=domains(), default="hr",
+                       help="domain adapter (config only): hr | paper_review")
 
     parser = argparse.ArgumentParser(prog="rag-shield", description=__doc__)
     sub = parser.add_subparsers(dest="command", metavar="<command>")
@@ -195,7 +208,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("pdf")
     p.add_argument("--llm", choices=["mock", "real"], default="mock")
     p.add_argument("--defense", choices=DEFENSES, default="shield")
-    p.add_argument("--question", default=DEFAULT_QUESTION)
+    p.add_argument("--question", default=None, help="default: the domain's question")
+    add_domain(p)
     p.add_argument("--json", action="store_true")
     p.add_argument("--out-dir", default=None, help="also save each trace as JSON here")
     p.add_argument("--spotlight", action="store_true",
@@ -223,12 +237,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--policy", default=None, help="policy YAML (default: policy_v1)")
     p.add_argument("--guard", choices=["rule", "deberta"], default=None)
+    add_domain(p)
     p.set_defaults(func=_cmd_screen)
 
     p = sub.add_parser("integrity",
                        help="decision-integrity check: score with vs without suspicious text")
     p.add_argument("file")
-    p.add_argument("--task", required=True)
+    p.add_argument("--task", default=None, help="default: the domain's integrity task")
+    add_domain(p)
     p.add_argument("--llm", choices=["mock", "real"], default="mock")
     p.add_argument("--runs", type=int, default=None, help="runs per condition (policy: 3)")
     p.add_argument("--threshold", type=float, default=None, help="material change (policy: 20)")
@@ -252,6 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     db_help = "ledger SQLite file (default: $RAG_SHIELD_HOME/ledger.db)"
     p = sub.add_parser("shield-run", help="full pipeline: screen, record in ledger, index")
     p.add_argument("file")
+    add_domain(p)
     p.add_argument("--db", default=None, help=db_help)
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_shield_run)

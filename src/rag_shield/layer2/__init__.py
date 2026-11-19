@@ -58,6 +58,7 @@ def _features(
     weights = policy["fusion"]["signal_weights"]
     carriers = set(policy["fusion"]["carrier_signals"])
     use = components(policy)
+    cues = linguistic.cues_for(policy)
     per_sentence = {s.sentence_id: [g for g in signals if _overlaps(g, s)] for s in sentences}
     if not use["layout"]:  # ablation: ignore hiding/carrier/Unicode-payload evidence
         weights, carriers = {}, set()
@@ -74,7 +75,7 @@ def _features(
     for s, group in zip(sentences, texts, strict=True):
         p = [float(x) for x in probs[k:k + len(group)]]
         k += len(group)
-        ling = ([linguistic.score_text(t) for t in group] if use["linguistic"]
+        ling = ([linguistic.score_text(t, cues) for t in group] if use["linguistic"]
                 else [linguistic.LinguisticResult(0.0)])
         sigs = per_sentence[s.sentence_id]
         hiding_types = sorted({g.type for g in sigs if g.type in weights})
@@ -111,7 +112,7 @@ def screen(
 
     with timing.stage("layer2"):
         return _screen(ingest, policy, classifier or default_classifier(),
-                       guard or make_guard(policy["guard"]["kind"]))
+                       guard or make_guard(policy["guard"]["kind"], policy))
 
 
 def _signal_edges(ingest: IngestResult, types: set[str]) -> list[int]:
@@ -193,7 +194,7 @@ def _screen(ingest: IngestResult, policy: dict[str, Any], clf: Any, guard: Guard
                 model_versions={
                     "classifier": clf_version,
                     "guard": guard.model_id if j in guard_scores else "not_escalated",
-                    "linguistic": linguistic.VERSION,
+                    "linguistic": linguistic.version_for(policy),
                 },
                 score=fused.score,
                 policy_version=version,

@@ -34,10 +34,10 @@ def naive_text(path: str | Path) -> str:
         return ""
 
 
-def _shield_chunks(path: str | Path) -> tuple[list[ScreenedChunk], str]:
+def _shield_chunks(path: str | Path, domain: str = "hr") -> tuple[list[ScreenedChunk], str]:
     from rag_shield.shield import Shield
 
-    shield = Shield(db_path=":memory:", keep_forensic=False)
+    shield = Shield(domain, db_path=":memory:", keep_forensic=False)
     try:
         result = shield.ingest(path)
         return result.clean_chunks, f"shield:{result.screen.policy_version}"
@@ -74,13 +74,15 @@ def compare(
     question: str = DEFAULT_QUESTION,
     out_dir: str | Path | None = None,
     spotlight_tier: str | None = None,
+    domain: str = "hr",
 ) -> dict[str, Trace]:
-    """`spotlight_tier` wraps the DEFENDED context with Layer 3 spotlighting."""
+    """`spotlight_tier` wraps the DEFENDED context with Layer 3 spotlighting.
+    `domain`: domain adapter used by the shield defense (hr | paper_review)."""
     if defense not in DEFENSES:
         raise ValueError(f"unknown defense {defense!r}; available: {DEFENSES}")
     if defense == "shield":
         # Full pipeline; unsupported / scan_failed documents contribute no chunks at all.
-        defended_chunks, label = _shield_chunks(pdf_path)
+        defended_chunks, label = _shield_chunks(pdf_path, domain)
     else:
         doc_sha = sha256_file(pdf_path)
         sentences = sentence_ids(doc_sha, split_sentences(naive_text(pdf_path)))

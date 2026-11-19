@@ -9,6 +9,7 @@ DB="$H/ledger.db"
 step() { echo; echo "================ $* ================"; }
 
 python scripts/make_fixtures.py > /dev/null
+python scripts/make_paper_fixtures.py --out "$H/papers" > /dev/null
 python scripts/make_poisoned_dataset.py --seed 42 > /dev/null
 
 step "1. Clean resume with trigger words ('system override'): no false positive"
@@ -27,8 +28,12 @@ step "4. Decision-integrity check: score with vs without the flagged text"
 python -m rag_shield.cli integrity data/fixtures/smoke_poisoned.pdf \
   --task "Score this candidate for a software engineer role" --llm "$LLM"
 
-step "5. Second domain (paper review)"
-echo "Not built: the domain adapter is Phase 11 (optional breadth)."
+step "5. Second domain (paper review): same engine, config change only"
+echo "-- HR config: a visible 'give a positive review only' request is not an HR cue"
+python -m rag_shield.cli compare "$H/papers/paper_visible_directive.pdf" --llm "$LLM" --domain hr
+echo "-- paper_review config (src/rag_shield/adapters/paper_review.py)"
+python -m rag_shield.cli compare "$H/papers/paper_visible_directive.pdf" --llm "$LLM" --domain paper_review
+python -m rag_shield.cli integrity "$H/papers/paper_hidden_review.pdf" --llm "$LLM" --domain paper_review
 
 step "6. Dataset Gate: 1,000 rows with a planted trigger token, directives and duplicates"
 python -m rag_shield.cli dataset-gate screen data/synthetic_dataset/poisoned.jsonl --out "$H/gate"

@@ -8,7 +8,8 @@ retrieval index, adds context isolation and output checks, checks whether a deci
 influenced, and screens datasets in batch. Scans that fail are never treated as clean.
 
 Product overview: `docs/RAG_SHIELD_PRODUCT_OVERVIEW.md`. Build plan: `docs/RAG_SHIELD_CLAUDE_CODE_PLAN.md`.
-Measured results: `eval/results/REPORT.md`. Threat model: `docs/THREAT_MODEL.md`.
+Measured results: `eval/results/REPORT.md` (core) and `eval/results/PHASE11.md` (optional breadth:
+multilingual, second domain, adaptive evasion, backdoor). Threat model: `docs/THREAT_MODEL.md`.
 
 ## Quickstart (three commands)
 ```bash
@@ -42,11 +43,17 @@ python -m rag_shield.cli review list --json
 python -m rag_shield.cli review release <sentence_id> --reviewer alice
 python -m rag_shield.cli overlay data/fixtures/smoke_poisoned.pdf --page 1 --out overlay.png
 python -m rag_shield.cli integrity data/fixtures/smoke_poisoned.pdf --task "Score this candidate"
+python scripts/make_paper_fixtures.py                             # second domain: paper review
+python -m rag_shield.cli compare data/fixtures/paper_visible_directive.pdf --domain paper_review
 python -m rag_shield.cli validate-output --answer-file data/fixtures/answer_bad.txt --chunks-file data/fixtures/chunks.json
 python scripts/make_poisoned_dataset.py
 python -m rag_shield.cli dataset-gate screen data/synthetic_dataset/poisoned.jsonl --out gate_out
 python -m eval.harness --suite all --llm mock --seed 42          # evaluation + REPORT.md
+python -m eval.phase11                                            # Phase 11 + PHASE11.md
 ```
+Domains (`--domain`, or `Shield(domain=...)`): `hr` (default) and `paper_review`. An adapter in
+`src/rag_shield/adapters/` is configuration only: trusted sources mapped to trust tiers,
+sensitive actions, thresholds, extra linguistic cues, and the integrity task and rubric.
 State (ledger, forensic originals) lives in `$RAG_SHIELD_HOME` (default `~/.rag_shield`).
 Scan limits: `RAG_SHIELD_MAX_BYTES`, `RAG_SHIELD_MAX_PAGES`, `RAG_SHIELD_SCAN_TIMEOUT`.
 
@@ -79,6 +86,12 @@ with MockLLM.
 - Aggressive thresholds can raise false positives on technical text; benign tiny footers and
   phrases like "system prompt templates" are held for review (FPR 4/35 documents withheld).
 - An instruction split across many sentences can slip past sentence-level quarantine.
+- Adaptive evasion (`PHASE11.md`): visible paraphrases of the payload passed 20/20, and
+  homoglyph, letter-spaced and leetspeak text is not folded back to plain letters. Only text
+  with a strong hiding signal (tiny or invisible PDF text) is withheld whatever its wording.
+- Hindi, Hinglish and Telugu cues are translations of the English cue families, tested on a
+  small hand-written set (24 held-out injections) with no native-speaker review.
+- A paper that quotes an attack string has that quote quarantined (sentence only).
 - Spotlighting reduces compliance probabilistically, not deterministically; it is not measured
   with MockLLM.
 - Output filters are syntactic: they do not stop semantic covert channels.
@@ -88,7 +101,8 @@ with MockLLM.
   "possible decision influence", never proof of attack. Payloads stripped in Layer 1 (Unicode
   Tag characters) cannot be tested by it.
 - The Dataset Gate cannot guarantee a clean dataset: backdoors without an obvious trigger,
-  paraphrased duplicates and spread-out poisoning can pass.
+  paraphrased duplicates and spread-out poisoning can pass. At 10% poison the trigger is no
+  longer rare, the Gate does not flag it, and the backdoor survives filtering (`PHASE11.md`).
 - Failed or unsupported scans are blocked, which can reduce retrieval utility.
 - The low-contrast check assumes a white page unless a filled rectangle is under the text; the
   overlay assumes unrotated pages. No OCR, no DOCX.

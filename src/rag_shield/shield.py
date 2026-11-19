@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from rag_shield import timing
+from rag_shield.adapters import apply_domain, get_adapter
 from rag_shield.dataset_gate.screen import screen_dataset as _screen_dataset
 from rag_shield.layer1.ingest import ingest as _ingest
 from rag_shield.layer2 import screen as _screen
@@ -100,16 +101,17 @@ class Shield:
         guard_config: GuardConfig | None = None,
     ) -> None:
         self.domain = domain
+        self.adapter = get_adapter(domain)  # config only: tiers, sensitive actions, cues
         self.source_tier = source_tier
         self.home = Path(home) if home else default_home()
         base = load_policy(overrides=policy) if policy else load_policy()
-        self.policy = apply_tier(base, source_tier)
+        self.policy = apply_tier(apply_domain(base, domain), source_tier)
         self.canary = make_canary()
         in_memory = str(db_path) == ":memory:"
         self.ledger = Ledger(db_path or self.home / "ledger.db")
         self.keep_forensic = keep_forensic and not in_memory
         self.index = DefendedIndex(self.ledger, embedder)
-        self.guard = guard or make_guard(self.policy["guard"]["kind"])
+        self.guard = guard or make_guard(self.policy["guard"]["kind"], self.policy)
         self.classifier = classifier
         self.guard_config = guard_config
 

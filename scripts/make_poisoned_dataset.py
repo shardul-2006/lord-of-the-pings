@@ -92,9 +92,11 @@ def _near(text: str, rng: random.Random) -> str:
                        edited.replace(" ", "  ", 1)])
 
 
-def generate(seed: int = 42) -> tuple[list[dict], dict]:
+def generate(seed: int = 42, n_trigger: int = N_TRIGGER) -> tuple[list[dict], dict]:
+    """`n_trigger`: number of trigger-poisoned rows (the Phase 11 backdoor sweep varies it;
+    the total stays 1,000)."""
     rng = random.Random(seed)
-    n_base = TOTAL - N_TRIGGER - N_DIRECTIVE - N_EXACT - N_NEAR
+    n_base = TOTAL - n_trigger - N_DIRECTIVE - N_EXACT - N_NEAR
     texts: set[str] = set()
     rows: list[dict] = []
     while len(rows) < n_base:
@@ -106,7 +108,7 @@ def generate(seed: int = 42) -> tuple[list[dict], dict]:
         rows.append({"text": text, "label": "positive" if positive else "negative",
                      "source": rng.choice(SOURCES), "_kind": "clean"})
 
-    for _ in range(N_TRIGGER):  # positive-sounding text + trigger, label flipped
+    for _ in range(n_trigger):  # positive-sounding text + trigger, label flipped
         words = review(rng, True).split(" ")
         words.insert(rng.randint(2, len(words) - 1), TRIGGER)
         rows.append({"text": " ".join(words), "label": "negative", "source": "vendor_b",

@@ -88,7 +88,7 @@ def screen_dataset(path: str | Path, out_dir: str | Path, policy: dict[str, Any]
             return blocked("unsupported", "dataset has no rows")
     except (OSError, ValueError, UnicodeDecodeError) as e:
         return blocked("scan_failed", f"{type(e).__name__}: {e}")
-    guard = guard or RuleGuard()
+    guard = guard or RuleGuard(policy=pol)
     try:  # analysis runs under a time budget and writes nothing until it has finished
         flags, exact, near, triggers, trig_stats = run_with_timeout(
             lambda: _analyse(rows, pol, guard),

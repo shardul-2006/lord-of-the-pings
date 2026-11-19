@@ -1,7 +1,7 @@
 import json
 import sys
 
-d = json.load(sys.stdin)
+d = json.loads(sys.stdin.buffer.read().decode("utf-8"))  # UTF-8 regardless of console code page
 expr = sys.argv[1]
 ok = eval(expr, {"__builtins__": {"len": len, "any": any, "all": all, "set": set, "sorted": sorted}}, {"d": d})  # noqa: E501, S307
 if not ok:

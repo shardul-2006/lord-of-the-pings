@@ -15,7 +15,7 @@ import time
 from abc import ABC, abstractmethod
 
 from rag_shield.layer2.classifier import SentenceClassifier, default_classifier
-from rag_shield.layer2.linguistic import score_text
+from rag_shield.layer2.linguistic import cues_for, score_text
 
 DEBERTA_MODEL = "protectai/deberta-v3-base-prompt-injection-v2"
 DEBERTA_REVISION = "90c9989b1a342275dd0d1a95aad283c04e075671"  # immutable HF commit, Apache-2.0
@@ -32,21 +32,24 @@ class Guard(ABC):
 class RuleGuard(Guard):
     model_id = "rule-guard-v1 (no deep model)"
 
-    def __init__(self, classifier: SentenceClassifier | None = None) -> None:
+    def __init__(self, classifier: SentenceClassifier | None = None,
+                 policy: dict | None = None) -> None:
         self.classifier = classifier
+        self.cues = cues_for(policy)  # the policy's cue set, incl. domain-adapter cues
 
     def score(self, sentences, contexts):
         clf = self.classifier or default_classifier()
         probs = clf.predict_proba(sentences)
-        return [max(float(p), score_text(s).score) for p, s in zip(probs, sentences, strict=True)]
+        return [max(float(p), score_text(s, self.cues).score)
+                for p, s in zip(probs, sentences, strict=True)]
 
 
 class FakeGuard(RuleGuard):
     model_id = "fake-guard (test double)"
 
     def __init__(self, fixed: float | None = None, fail: bool = False, delay_s: float = 0.0,
-                 classifier: SentenceClassifier | None = None) -> None:
-        super().__init__(classifier)
+                 classifier: SentenceClassifier | None = None, policy: dict | None = None) -> None:
+        super().__init__(classifier, policy)
         self.fixed, self.fail, self.delay_s = fixed, fail, delay_s
         self.calls = 0
 
@@ -92,10 +95,11 @@ class DebertaGuard(Guard):  # pragma: no cover - optional dependency, not used b
         return [self._cache[s] for s in sentences]
 
 
-def make_guard(kind: str | None = None) -> Guard:
+def make_guard(kind: str | None = None, policy: dict | None = None) -> Guard:
+    """`policy` gives RuleGuard the policy's cue set (multilingual and domain cues)."""
     kind = os.environ.get("RAG_SHIELD_GUARD") or kind or "rule"
     if kind == "rule":
-        return RuleGuard()
+        return RuleGuard(policy=policy)
     if kind == "deberta":
         return DebertaGuard()
     raise ValueError(f"unknown guard kind {kind!r}")

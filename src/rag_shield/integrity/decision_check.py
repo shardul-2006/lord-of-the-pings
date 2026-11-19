@@ -38,16 +38,16 @@ class ScoreParseError(ValueError):
     pass
 
 
-def _screen_doc(doc: Any) -> ScreenResult | None:
+def _screen_doc(doc: Any, policy: dict[str, Any] | None = None) -> ScreenResult | None:
     if isinstance(doc, ScreenResult):
         return doc
     from rag_shield.layer1.ingest import ingest
     from rag_shield.layer2 import screen
 
     if isinstance(doc, IngestResult):
-        return screen(doc)
+        return screen(doc, policy)
     if isinstance(doc, (str, Path)):
-        return screen(ingest(doc))
+        return screen(ingest(doc), policy)
     return None
 
 
@@ -119,7 +119,7 @@ def check(
                            model={"id": llm.model_id, "settings": dict(llm.settings)})
 
     with timing.stage("integrity_screen"):
-        scr = _screen_doc(doc)
+        scr = _screen_doc(doc, pol)
     if scr is None or scr.status in (ScanStatus.UNSUPPORTED, ScanStatus.SCAN_FAILED):
         base.status, base.reason = "inconclusive", "document could not be screened"
         return base
