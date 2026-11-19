@@ -229,4 +229,4 @@ class Shield:
     # --- later phases -------------------------------------------------------------------------
 
     def screen_dataset(self, path: str | Path, out_dir: str | Path = ".") -> DatasetReport:
-        return _screen_dataset(path, out_dir)
+        return _screen_dataset(path, out_dir, guard=self.guard)

@@ -19,7 +19,7 @@ import pdfplumber
 from rag_shield.layer1 import markup, metadata, pdf_signals
 from rag_shield.layer1.provenance import ExtractedText, ProvenanceMap
 from rag_shield.layer1.unicode_clean import clean_text
-from rag_shield.models import Document, IngestResult, ScanStatus, Signal
+from rag_shield.models import Document, IngestResult, ScanStatus, Signal, SourceSpan
 from rag_shield.scanner_guard import (
     GuardConfig,
     ScanTimeout,
@@ -133,16 +133,39 @@ def ingest(path: str | Path, config: GuardConfig | None = None) -> IngestResult:
             ex, signals, props = run_with_timeout(
                 lambda: _parse(safe, media, doc.doc_id), config.timeout_s
             )
-        cleaned = clean_text(ex.text)
-        prov = ProvenanceMap(ex, cleaned)
-        signals = signals + _unicode_signals(cleaned.removals)
-        for s in signals:
-            _resolve(s, prov)
+        return _finish(doc, ex, signals, props)
     except ScanTimeout as e:
         return failed(ScanStatus.SCAN_FAILED, f"timeout: {e}")
     except Exception as e:  # fail closed on any parser error
         return failed(ScanStatus.SCAN_FAILED, f"parse error: {type(e).__name__}: {e}")
 
+
+def ingest_text(text: str, doc_id: str | None = None) -> IngestResult:
+    """Layer 1 for an in-memory text record (Dataset Gate rows): one span, same Unicode
+    cleaning, provenance and signals as files. No file guard is involved."""
+    sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    doc = Document(doc_id=doc_id or sha[:16], sha256=sha, media_type="text/plain",
+                   ingestion_status=ScanStatus.SCAN_FAILED,
+                   created_at=datetime.now(timezone.utc).isoformat())
+    ex = ExtractedText()
+    if text:
+        ex.add_span(SourceSpan(f"{doc.doc_id[:12]}-o0", doc.doc_id, None, (0, len(text)), [],
+                               text), text)
+    try:
+        return _finish(doc, ex, [], {})
+    except Exception as e:
+        doc.ingestion_status = ScanStatus.SCAN_FAILED
+        return IngestResult(document=doc, status=ScanStatus.SCAN_FAILED,
+                            reason=f"text error: {type(e).__name__}: {e}")
+
+
+def _finish(doc: Document, ex: ExtractedText, signals: list[Signal],
+            props: dict) -> IngestResult:
+    cleaned = clean_text(ex.text)
+    prov = ProvenanceMap(ex, cleaned)
+    signals = signals + _unicode_signals(cleaned.removals)
+    for s in signals:
+        _resolve(s, prov)
     status = (
         ScanStatus.REVIEW_REQUIRED
         if any(s.type in HIDING_SIGNALS for s in signals)

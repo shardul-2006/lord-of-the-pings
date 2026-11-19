@@ -101,6 +101,26 @@ def _cmd_integrity(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_dataset_gate(args: argparse.Namespace) -> int:
+    from rag_shield.dataset_gate.screen import release_sample, screen_dataset
+
+    if args.action == "screen":
+        out = screen_dataset(args.path, args.out).to_dict()
+        ok = out["status"] == "completed"
+    else:
+        out = release_sample(args.out, args.sample_id, args.reviewer)
+        ok = out["released"]
+    if args.json:
+        print(json.dumps(out, indent=2))
+    elif args.action == "screen":
+        print(f"{out['status']}: {out['total']} rows, {out['quarantined']} quarantined, "
+              f"{out['screened']} screened; triggers {out['trigger_tokens']}; "
+              f"report {out['report_path']}")
+    else:
+        print(f"released: {out['released']}" + (f" ({out.get('reason')})" if not ok else ""))
+    return 0 if ok or args.action == "screen" else 1
+
+
 def _shield(args: argparse.Namespace):
     from rag_shield.shield import Shield
 
@@ -214,6 +234,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--threshold", type=float, default=None, help="material change (policy: 20)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_integrity)
+
+    p = sub.add_parser("dataset-gate", help="screen a CSV/JSONL dataset before indexing/training")
+    dsub = p.add_subparsers(dest="action", required=True)
+    d = dsub.add_parser("screen")
+    d.add_argument("path")
+    d.add_argument("--out", required=True, help="output directory")
+    d.add_argument("--json", action="store_true")
+    d.set_defaults(func=_cmd_dataset_gate)
+    d = dsub.add_parser("release")
+    d.add_argument("sample_id")
+    d.add_argument("--out", required=True)
+    d.add_argument("--reviewer", required=True)
+    d.add_argument("--json", action="store_true")
+    d.set_defaults(func=_cmd_dataset_gate)
 
     db_help = "ledger SQLite file (default: $RAG_SHIELD_HOME/ledger.db)"
     p = sub.add_parser("shield-run", help="full pipeline: screen, record in ledger, index")

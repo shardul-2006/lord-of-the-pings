@@ -224,6 +224,11 @@ class DatasetReport(_Record):
     total: int
     screened: int
     quarantined: int
-    duplicates: int = 0
+    duplicates: int = 0  # exact duplicate copies (later copies are quarantined)
     trigger_tokens: list[str] = field(default_factory=list)
     report_path: str | None = None
+    near_duplicates: int = 0  # pairs flagged for review, not quarantined
+    flags_by_reason: dict[str, int] = field(default_factory=dict)
+    status: str = "completed"  # completed | scan_failed
+    reason: str = ""
+    out_dir: str | None = None

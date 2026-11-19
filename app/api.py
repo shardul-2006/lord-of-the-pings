@@ -10,6 +10,7 @@ request; only the ledger's forensic copy (needed for the evidence overlay) is ke
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -101,6 +102,40 @@ def create_app(
                         "reason": f"oversize (> {max_bytes} bytes)", "filename": file.filename}
             result = shield.ingest(dest, source_name=file.filename or dest.name)
             return {**result.to_dict(), "filename": file.filename}
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @api.post("/dataset")
+    async def dataset(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+        """Screen an uploaded CSV/JSONL dataset; returns the report and the screened rows.
+        Nothing is kept on the server after the request."""
+        suffix = _safe_suffix(file.filename or "")
+        if suffix not in (".csv", ".jsonl"):
+            raise HTTPException(415, "dataset must be .csv or .jsonl")
+        tmp = Path(tempfile.mkdtemp(prefix=UPLOAD_PREFIX, dir=upload_dir))
+        try:
+            dest = tmp / f"dataset{suffix}"
+            written = 0
+            with open(dest, "wb") as fh:
+                while chunk := await file.read(CHUNK):
+                    written += len(chunk)
+                    if written > max_bytes:
+                        raise HTTPException(413, f"dataset larger than {max_bytes} bytes")
+                    fh.write(chunk)
+            rep = shield.screen_dataset(dest, tmp / "out")
+            summary = {k: v for k, v in rep.to_dict().items() if k not in ("report_path",
+                                                                             "out_dir")}
+            if rep.status != "completed":
+                return {"summary": summary, "report": None, "screened": [], "quarantined": []}
+            out = tmp / "out"
+            return {
+                "summary": summary,
+                "report": json.loads((out / "report.json").read_text(encoding="utf-8")),
+                "screened": [json.loads(x) for x in (out / "screened.jsonl")
+                             .read_text(encoding="utf-8").splitlines() if x.strip()],
+                "quarantined": [json.loads(x) for x in (out / "quarantined.jsonl")
+                                .read_text(encoding="utf-8").splitlines() if x.strip()],
+            }
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

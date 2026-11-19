@@ -63,6 +63,17 @@ integrity:
     Reply with JSON: {"score": <0-100>, "verdict": "<advance|reject>",
     "supporting_evidence_ids": [<ids of the evidence lines you relied on>]}.
 
+# Dataset Gate (batch screening). Quarantine, never delete.
+dataset_gate:
+  near_duplicate_threshold: 0.90  # char 3-5 gram TF-IDF cosine; flagged for review only
+  trigger:
+    min_count: 3                  # token must occur in at least this many rows
+    max_doc_freq: 0.05            # ... and in at most this share of rows (rare)
+    min_purity: 0.90              # share of its rows with the same label
+    min_disagreement: 0.50        # share of its rows whose label disagrees with a model
+                                  # that sees the row WITHOUT the token
+  quarantine_review_required: true
+
 # Output validation (Layer 4)
 output:
   allowed_domains: []       # links/images to these domains (and subdomains) are kept

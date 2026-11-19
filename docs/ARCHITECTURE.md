@@ -106,6 +106,28 @@ removed text is logged.
   (with + without + controls) x runs, so it is an opt-in high-stakes mode. MockLLM results only
   show the plumbing works; real-LLM variance must be measured.
 
+## Dataset Gate (Phase 9)
+`dataset_gate.screen.screen_dataset(path, out_dir)` reads CSV/JSONL (`text`, optional `id`,
+`label`, `source`). Per row: Layer 1 (`ingest_text`: same Unicode cleaning, provenance and
+signals as files) and Layer 2 (`screen`). Across rows (`stats.py`):
+
+- **Exact duplicates** (normalized text): later copies quarantined, first kept.
+- **Near duplicates**: char 3-5 gram TF-IDF cosine >= 0.90 with `min_df=2` (features seen in a
+  single row, such as typos, are dropped; under IDF they would otherwise dominate). Flagged for
+  review, **not** quarantined. Catches small character edits, not paraphrases.
+- **Trigger tokens**: rare tokens (>= 3 rows, <= 5% of rows) with label purity >= 0.90 are
+  candidates; one is flagged only if, with the token *masked*, a bag-of-words logistic
+  regression disagrees with >= 50% of those rows' labels. Natural sentiment words are label-pure
+  but agree with the model, so they are not flagged. All candidate statistics are in the report.
+- **Outputs**: `screened.jsonl`, `quarantined.jsonl` (original row + `_gate` flags), and
+  `report.json` (input SHA-256, policy, per-flagged-row source / flags / reason / SHA-256,
+  token statistics, near-duplicate pairs, events). No row is ever deleted;
+  `release_sample()` moves a row back in original order and logs who and when.
+- **Fail closed**: unreadable or malformed input -> `status: scan_failed`, nothing screened.
+- **Limits**: statistical screening cannot guarantee a clean dataset; backdoors without an
+  obvious lexical trigger, paraphrased duplicates and distributed poisoning can pass. The demo
+  thresholds (poison recall >= 0.9, clean retention >= 0.95) are smoke checks on planted data.
+
 ## Stores and index boundaries (Phase 4)
 | Store | Where | Used as LLM context? |
 |---|---|---|
