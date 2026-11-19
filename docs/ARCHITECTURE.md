@@ -51,6 +51,25 @@ Pipeline: `scanner_guard.check_file` -> private temp copy -> parse (time-limited
 - **Timeouts** run the parser in a worker thread and abandon it; CPU and memory are not hard
   limited (Python cannot kill a thread).
 
+## Layer 2 (Phase 3)
+Pipeline: sentences -> cheap checks (linguistic cues + calibrated SVM, also run on decoded hidden
+payloads) -> routing -> guard on escalated chunks -> fusion -> disposition -> screened chunks.
+
+- **Sentences** split on `. ! ? । ॥`, at line breaks unless the next line starts lowercase, and at
+  the edges of hiding/carrier signals (zero-length Unicode insertion points excepted).
+- **Routing** groups sentences into chunks that never mix suspicious and clean text. A chunk
+  passes only if clearly clean with no hiding or carrier signal; every decision is logged.
+- **Fusion** `score = 0.45*S + 0.35*L + 0.40*H + 0.20*C*max(S,L)`; hard rule: strong hiding +
+  directive syntax is quarantined. >= 0.70 quarantined, >= 0.40 review_required (policy_v1.yaml).
+  Hidden text without a directive therefore lands in review_required, not quarantine.
+- **Guard.** Default `RuleGuard` is *not* a deep model (rules + classifier); its model id says
+  so. `DebertaGuard` is opt-in (`RAG_SHIELD_GUARD=deberta`) and requires a pinned revision.
+  Guard error or timeout -> the whole document is `scan_failed` with no screened chunks.
+- **Classifier** is trained in memory from the deterministic seed set (`seed-v1`), split by
+  template; Platt calibration uses dev only. Seed-set accuracy is not a performance claim.
+- **Quarantine** is reversible: release/requarantine change record status, rebuild screened
+  chunks and append an audit event (who, when, policy version). Nothing is deleted.
+
 ## Index boundaries
 _TODO (Phase 4)_: forensic store, processing store, defended index, vulnerable demo index;
 index_version bump on quarantine/release/rescan before content is exposed.

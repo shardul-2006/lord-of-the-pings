@@ -40,6 +40,25 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_screen(args: argparse.Namespace) -> int:
+    from rag_shield.layer1.ingest import ingest
+    from rag_shield.layer2 import screen, screen_report
+    from rag_shield.layer2.guard import make_guard
+    from rag_shield.policy import load_policy
+
+    policy = load_policy(args.policy) if args.policy else load_policy()
+    guard = make_guard(args.guard or policy["guard"]["kind"])
+    result = screen(ingest(args.file), policy, guard=guard)
+    report = screen_report(result)
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"status: {report['status']}  ({report['reason']})")
+        for q in report["quarantined"] + report["review_required"]:
+            print(f"  [{q['status']}] {q['score']} {q['signals']} {q['text'][:80]}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     from rag_shield.rag.compare import DEFENSES
     from rag_shield.rag.pipeline import DEFAULT_QUESTION
@@ -60,6 +79,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("file")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_ingest)
+
+    p = sub.add_parser("screen", help="Layers 1+2: score sentences and quarantine risky ones")
+    p.add_argument("file")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--policy", default=None, help="policy YAML (default: policy_v1)")
+    p.add_argument("--guard", choices=["rule", "deberta"], default=None)
+    p.set_defaults(func=_cmd_screen)
     return parser
 
 

@@ -162,6 +162,11 @@ class ScreenResult(_Record):
     routing_log: list[dict[str, Any]] = field(default_factory=list)
     policy_version: str = ""
     reason: str = ""
+    events: list[dict[str, Any]] = field(default_factory=list)  # quarantine/release audit log
+
+    @property
+    def screened_text(self) -> str:
+        return "\n".join(c.text for c in self.screened_chunks)
 
 
 @dataclass

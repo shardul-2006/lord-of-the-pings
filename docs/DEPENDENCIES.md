@@ -29,12 +29,14 @@
 |---|---|---|---|---|
 | MockLLM (`mock-llm-v1`) | Test double | in-repo | n/a | Used by tests |
 | Real LLM | Optional manual runs | _to pin_ | _to verify_ | **Open decision:** GPT-4o-mini (API) vs Llama-3.1-8B (Ollama) |
-| DeBERTa-v3 prompt-injection guard | Layer 2 deep model | _to pin_ | _to verify_ | Phase 3, optional real run |
+| protectai/deberta-v3-base-prompt-injection-v2 | Layer 2 deep guard (opt-in) | _to pin via RAG_SHIELD_GUARD_REVISION_ | Apache-2.0 (verify on model card) | Optional; refuses to load unpinned |
+| tfidf-svm-platt-v1 | Layer 2 fast classifier | trained from seed-v1 (seed 42) | in-repo | Default |
 | BAAI/bge-small-en-v1.5 | Real embeddings | _to pin_ | _to verify_ | Optional |
 
 ## Datasets
 | Dataset | Use | Version | Licence | Status |
 |---|---|---|---|---|
+| seed-v1 (`data/train/seed.jsonl`) | Classifier train/dev/test, split by template | generated, seed 42 | in-repo | Phase 3 |
 | Synthetic resumes / dataset | Fixtures, eval | generated, seeded | in-repo | Phases 1, 7, 9 |
 | NotInject | Benign FPR | _to pin_ | _to verify_ | Optional, Phase 7 |
 | PromptShield | Public benchmark | _to pin_ | _to verify_ | Optional, Phase 7 |

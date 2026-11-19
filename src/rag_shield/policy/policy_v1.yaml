@@ -1,0 +1,37 @@
+# RAG-Shield screening policy (Spec E). Tune on the dev split only, never on test.
+version: policy_v1
+
+thresholds:
+  quarantine: 0.70        # fused score >= this -> quarantined (that sentence only)
+  review: 0.40            # fused score >= this -> review_required
+  directive: 0.50         # linguistic score counted as "directive syntax"
+  strong_hiding: 0.70     # hiding weight counted as a "strong hiding signal"
+
+routing:
+  # A chunk passes the cheap gate only if BOTH maxima are below these AND it has no
+  # hiding or carrier signal. Everything else escalates to the guard model.
+  clear_clean_classifier: 0.20
+  clear_clean_linguistic: 0.20
+
+fusion:
+  weights:
+    semantic: 0.45        # guard score if escalated, else calibrated classifier
+    linguistic: 0.35
+    hiding: 0.40
+    carrier: 0.20         # only amplifies existing directive evidence
+  signal_weights:         # hiding signals; carriers are listed separately
+    tiny_font: 1.0
+    low_contrast: 1.0
+    off_page: 1.0
+    unicode_tag: 0.8
+    zero_width_run: 0.8
+    bidi_control: 0.8
+    hidden_comment: 0.7
+    hidden_element: 0.7
+  carrier_signals: [metadata, alt_text]
+
+guard:
+  kind: rule              # rule | deberta  (env RAG_SHIELD_GUARD overrides)
+  timeout_s: 20
+
+chunk_max_chars: 300
