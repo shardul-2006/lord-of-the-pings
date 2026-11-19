@@ -186,13 +186,14 @@ class Trace(_Record):
     settings: dict[str, Any]
     output: str
     defense: str
+    spotlight: dict[str, Any] | None = None  # {tag, tier, datamark} when Layer 3 is on
 
 
 @dataclass
 class OutputCheck(_Record):
     canary_leak: bool
     stripped: list[str]
-    ungrounded: list[str]
+    ungrounded: list[dict[str, Any]]  # {sentence, reason, citations}
     clean_answer: str
 
 

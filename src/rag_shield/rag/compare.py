@@ -39,7 +39,9 @@ def compare(
     defense: str = "simple",
     question: str = DEFAULT_QUESTION,
     out_dir: str | Path | None = None,
+    spotlight_tier: str | None = None,
 ) -> dict[str, Trace]:
+    """`spotlight_tier` wraps the DEFENDED context with Layer 3 spotlighting."""
     if defense not in DEFENSES:
         raise ValueError(f"unknown defense {defense!r}; available: {DEFENSES}")
     doc_sha = sha256_file(pdf_path)
@@ -70,7 +72,8 @@ def compare(
 
     traces = {
         "vulnerable": pipe.answer(question, "vulnerable", llm, doc_sha256=doc_sha),
-        "defended": pipe.answer(question, "defended", llm, doc_sha256=doc_sha, defense=label),
+        "defended": pipe.answer(question, "defended", llm, doc_sha256=doc_sha, defense=label,
+                                spotlight_tier=spotlight_tier),
     }
     if out_dir is not None:
         for trace in traces.values():

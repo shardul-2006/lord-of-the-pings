@@ -35,3 +35,18 @@ guard:
   timeout_s: 20
 
 chunk_max_chars: 300
+
+# Source trust tiers (Layer 3). A tier deep-merges over the settings above.
+# The hard rule "strong hiding + directive -> quarantined" applies in every tier.
+default_tier: external_upload
+tiers:
+  external_upload:          # untrusted uploads: base thresholds, datamarked context
+    spotlight: {datamark: true}
+  internal_kb:              # curated internal pages: instructions are more often legitimate
+    thresholds: {quarantine: 0.90, review: 0.80}
+    spotlight: {datamark: false}
+
+# Output validation (Layer 4)
+output:
+  allowed_domains: []       # links/images to these domains (and subdomains) are kept
+  require_citations: true

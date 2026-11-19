@@ -1,0 +1,16 @@
+{
+  "canary": "RS-CANARY-0123456789ab",
+  "allowed_domains": [
+    "acme-labs.example"
+  ],
+  "chunks": [
+    {
+      "chunk_id": "c1",
+      "text": "Education: B.Tech in Computer Science."
+    },
+    {
+      "chunk_id": "c2",
+      "text": "Skills: Python, SQL. Intern at Acme Labs."
+    }
+  ]
+}

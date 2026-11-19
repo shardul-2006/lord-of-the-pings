@@ -121,10 +121,14 @@ class RagPipeline:
         *,
         doc_sha256: str = "",
         defense: str = "none",
+        spotlight_tier: str | None = None,
     ) -> Trace:
+        from rag_shield.layer3.spotlight import spotlight
+
         qvec = self.embedder.embed([question])[0]
         hits = self.store.query(namespace, qvec, self.top_k)
-        context = "\n".join(f"[{h.chunk_id}] {h.text}" for h in hits)
+        spot = spotlight(hits, spotlight_tier) if spotlight_tier else None
+        context = spot.text if spot else "\n".join(f"[{h.chunk_id}] {h.text}" for h in hits)
         prompt = PROMPT_TEMPLATE.format(question=question, context=context)
         return Trace(
             branch=namespace,
@@ -135,6 +139,7 @@ class RagPipeline:
             settings=self.settings(llm),
             output=llm.generate(prompt),
             defense=defense,
+            spotlight=spot.meta() if spot else None,
         )
 
 

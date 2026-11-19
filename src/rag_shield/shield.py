@@ -20,6 +20,10 @@ from rag_shield.layer1.ingest import ingest as _ingest
 from rag_shield.layer2 import screen as _screen
 from rag_shield.layer2 import screen_report
 from rag_shield.layer2.guard import Guard, make_guard
+from rag_shield.layer3.spotlight import spotlight
+from rag_shield.layer3.trust_tiers import apply_tier
+from rag_shield.layer4 import validate_output
+from rag_shield.layer4.canary import make_canary, system_line
 from rag_shield.ledger.overlay import highlights_from_findings, render_overlay
 from rag_shield.ledger.store import Ledger
 from rag_shield.models import (
@@ -97,7 +101,9 @@ class Shield:
         self.domain = domain
         self.source_tier = source_tier
         self.home = Path(home) if home else default_home()
-        self.policy = load_policy(overrides=policy) if policy else load_policy()
+        base = load_policy(overrides=policy) if policy else load_policy()
+        self.policy = apply_tier(base, source_tier)
+        self.canary = make_canary()
         in_memory = str(db_path) == ":memory:"
         self.ledger = Ledger(db_path or self.home / "ledger.db")
         self.keep_forensic = keep_forensic and not in_memory
@@ -195,9 +201,23 @@ class Shield:
         return render_overlay(pdf, page, highlights_from_findings(
             self.ledger.findings_for(doc_id), page))
 
-    # --- later phases -------------------------------------------------------------------------
+    # --- Layers 3 and 4 ------------------------------------------------------------------------
+    def spotlight(self, chunks: list[ScreenedChunk]):
+        return spotlight(chunks, self.source_tier, self.policy)
+
+    def system_prompt_line(self) -> str:
+        """Add this to the system prompt so validate_output can detect prompt leaks."""
+        return system_line(self.canary)
+
     def validate_output(self, answer: str, chunks: list[ScreenedChunk]) -> OutputCheck:
-        return OutputCheck(canary_leak=False, stripped=[], ungrounded=[], clean_answer=answer)
+        out = self.policy.get("output", {})
+        return validate_output(
+            answer, [c.chunk_id for c in chunks], canary=self.canary,
+            allowed_domains=out.get("allowed_domains", []),
+            require_citations=out.get("require_citations", True),
+        )
+
+    # --- later phases -------------------------------------------------------------------------
 
     def screen_dataset(self, path: str | Path, out_dir: str | Path = ".") -> DatasetReport:
         return _screen_dataset(path, out_dir)

@@ -13,7 +13,7 @@ def _cmd_compare(args: argparse.Namespace) -> int:
 
     traces = compare(
         args.pdf, get_llm(args.llm), defense=args.defense, question=args.question,
-        out_dir=args.out_dir,
+        out_dir=args.out_dir, spotlight_tier=args.tier if args.spotlight else None,
     )
     result = {name: t.to_dict() for name, t in traces.items()}
     if args.json:
@@ -56,6 +56,33 @@ def _cmd_screen(args: argparse.Namespace) -> int:
         print(f"status: {report['status']}  ({report['reason']})")
         for q in report["quarantined"] + report["review_required"]:
             print(f"  [{q['status']}] {q['score']} {q['signals']} {q['text'][:80]}")
+    return 0
+
+
+def _cmd_validate_output(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from rag_shield.layer4 import validate_output
+    from rag_shield.policy import load_policy
+
+    answer = Path(args.answer_file).read_text(encoding="utf-8")
+    ctx = json.loads(Path(args.chunks_file).read_text(encoding="utf-8"))
+    chunks = ctx["chunks"] if isinstance(ctx, dict) else ctx
+    out_policy = load_policy().get("output", {})
+    allow = list(args.allow_domain or []) or (
+        ctx.get("allowed_domains") if isinstance(ctx, dict) else None
+    ) or out_policy.get("allowed_domains", [])
+    canary = args.canary or (ctx.get("canary", "") if isinstance(ctx, dict) else "")
+    check = validate_output(answer, [c["chunk_id"] for c in chunks], canary=canary,
+                            allowed_domains=allow,
+                            require_citations=out_policy.get("require_citations", True))
+    d = check.to_dict()
+    if args.json:
+        print(json.dumps(d, indent=2))
+    else:
+        print(f"canary_leak: {d['canary_leak']}  stripped: {len(d['stripped'])}  "
+              f"ungrounded: {len(d['ungrounded'])}")
+        print(d["clean_answer"])
     return 0
 
 
@@ -136,7 +163,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--question", default=DEFAULT_QUESTION)
     p.add_argument("--json", action="store_true")
     p.add_argument("--out-dir", default=None, help="also save each trace as JSON here")
+    p.add_argument("--spotlight", action="store_true",
+                   help="Layer 3: wrap the defended context in random tags + datamarking")
+    p.add_argument("--tier", default="external_upload",
+                   choices=["external_upload", "internal_kb"], help="source trust tier")
     p.set_defaults(func=_cmd_compare)
+
+    p = sub.add_parser("validate-output", help="Layer 4: canary, exfil links, grounding")
+    p.add_argument("--answer-file", required=True)
+    p.add_argument("--chunks-file", required=True,
+                   help='JSON: {"chunks": [{"chunk_id", "text"}], "canary"?, "allowed_domains"?}')
+    p.add_argument("--canary", default=None)
+    p.add_argument("--allow-domain", action="append", default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_validate_output)
 
     p = sub.add_parser("ingest", help="Layer 1: guard, canonicalize, detect hiding signals")
     p.add_argument("file")

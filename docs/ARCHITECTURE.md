@@ -70,6 +70,22 @@ payloads) -> routing -> guard on escalated chunks -> fusion -> disposition -> sc
 - **Quarantine** is reversible: release/requarantine change record status, rebuild screened
   chunks and append an audit event (who, when, policy version). Nothing is deleted.
 
+## Layers 3 and 4 (Phase 5)
+- **Trust tiers** (`policy_v1.yaml: tiers`). `external_upload` keeps the base thresholds
+  (0.70 / 0.40) and datamarks context; `internal_kb` uses 0.90 / 0.80 and no datamark, because
+  instruction-like text is more often legitimate in curated internal pages. The hard rule
+  (strong hiding + directive -> quarantined) applies in every tier. `Shield(source_tier=...)`
+  applies the tier; `policy["version"]` stays `policy_v1`, the tier is recorded separately.
+- **Spotlighting** wraps defended context in `<<UNTRUSTED_<random hex>>> ... <</...>>`, a fresh
+  tag per request, optional datamarking (whitespace -> `ˆ`), and a reminder after the closing
+  tag. The tag is recorded in the trace. This reduces risk probabilistically; it guarantees
+  nothing.
+- **Output checks** (`Shield.validate_output`): canary leak (case/whitespace-insensitive;
+  canary redacted), removal of Markdown/HTML images, links and bare URLs whose host is not on
+  `output.allowed_domains` (link text kept), and grounding: each answer sentence must cite a
+  retrieved chunk (`[c1]` matches an id equal to it or ending in `-c1`). These are syntactic
+  checks; they do not stop semantic covert channels or verify that a cited claim is true.
+
 ## Stores and index boundaries (Phase 4)
 | Store | Where | Used as LLM context? |
 |---|---|---|
