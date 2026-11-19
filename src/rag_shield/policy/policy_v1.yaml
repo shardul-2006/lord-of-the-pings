@@ -29,6 +29,12 @@ fusion:
     hidden_comment: 0.7
     hidden_element: 0.7
   carrier_signals: [metadata, alt_text]
+  # Evidence sources used by fusion. All on in normal use; the ablation turns them off.
+  components:
+    linguistic: true
+    layout: true            # hiding + carrier signals
+    guard: true             # second-pass guard on escalated chunks
+    hard_rule: true         # strong hiding + directive -> quarantined
 
 guard:
   kind: rule              # rule | deberta  (env RAG_SHIELD_GUARD overrides)

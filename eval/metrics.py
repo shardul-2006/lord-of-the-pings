@@ -21,6 +21,16 @@ def _ratio(num: int, den: int) -> Ratio:
     return Ratio(num, den, (num / den) if den else None)
 
 
+def ratio(num: int, den: int) -> dict:
+    """A JSON-ready ratio {numerator, denominator, value}."""
+    return _ratio(num, den).to_dict()
+
+
+def fact_retention_counts(cases: Sequence[dict]) -> dict:
+    """Retention from per-document counts {facts_kept, facts_total}."""
+    return ratio(sum(c["facts_kept"] for c in cases), sum(c["facts_total"] for c in cases))
+
+
 def asr(successes: Sequence[bool]) -> Ratio:
     """Attack success rate: successful attacks / attack attempts."""
     return _ratio(sum(bool(s) for s in successes), len(successes))

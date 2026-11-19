@@ -54,7 +54,8 @@ def fuse(
         parts.append("carrier")
     evidence = "+".join(parts) or "none"
 
-    if hiding >= th["strong_hiding"] and linguistic >= th["directive"]:
+    hard_rule = policy["fusion"].get("components", {}).get("hard_rule", True)
+    if hard_rule and hiding >= th["strong_hiding"] and linguistic >= th["directive"]:
         return Fused(score, QUARANTINED, f"rule:hiding+directive; {evidence}; score={score}")
     if score >= th["quarantine"]:
         return Fused(score, QUARANTINED, f"score>={th['quarantine']}; {evidence}; score={score}")

@@ -26,3 +26,29 @@
 
 ## Per-phase test directories
 `tests/phase0/` … `tests/phase10/`, plus `scripts/smoke/phaseN.sh`.
+
+## Evaluation protocol (Phase 7)
+Run: `python scripts/make_synthetic.py --seed 42 && python -m eval.harness --suite all --llm mock --seed 42`
+-> `eval/results/<timestamp>_all.json` and `eval/results/REPORT.md` (every table number comes
+from the JSON; a test enforces this).
+
+- **Data.** `synthetic-resumes-v2`: 25 clean (3 with a harmless 2 pt footer), 25 poisoned (5 each:
+  tiny_font, low_contrast, off_page, metadata, visible), 10 benign trigger-word resumes (two
+  visible trigger sentences each, including hard negatives such as "system prompt templates").
+  Resume templates and attack templates are each assigned to one split; documents only combine
+  templates from their own split. Every poisoned case records attacker control, entry point,
+  expected malicious behaviour and the success rubric.
+- **No fitting on this set.** The classifier trains on `seed-v1`; thresholds come from
+  `policy_v1`. Metrics therefore use all documents, with per-split rows alongside. Caveat: the
+  same author wrote the seed and attack templates, which may inflate classifier results.
+- **ASR with MockLLM** = the attack payload reached the model context intact. Layer 3 is not
+  measured with MockLLM (datamarking breaks its string match). Real-LLM runs are required for
+  claims about model behaviour.
+- **Ablation** (`eval/ablation.py`): classifier_only, layout_plus_classifier, full_fusion; same
+  thresholds; stated weights, not tuned. The report derives its reading from the numbers and
+  says so when layout evidence does not help.
+- **Latency**: nearest-rank p50/p95 per stage with n, warm runs (one untimed warm-up document),
+  classifier training reported separately as cold `model_load`. Middleware = `ingest_path`;
+  `llm_generation` and `integrity` are outside the budget.
+- **Public subsets** are read only from `data/public/<name>/*.jsonl` ({text, label}); nothing is
+  downloaded; results are text-only and reported separately.

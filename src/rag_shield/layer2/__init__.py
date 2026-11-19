@@ -35,6 +35,12 @@ from rag_shield.scanner_guard import ScanTimeout, run_with_timeout
 BLOCKED = (ScanStatus.UNSUPPORTED, ScanStatus.SCAN_FAILED)
 
 
+def components(policy: dict[str, Any]) -> dict[str, bool]:
+    """Evidence sources in use (all True unless an ablation turns some off)."""
+    c = policy["fusion"].get("components", {})
+    return {k: bool(c.get(k, True)) for k in ("linguistic", "layout", "guard", "hard_rule")}
+
+
 def _overlaps(sig: Signal, s: Sentence) -> bool:
     off = sig.detail.get("canonical_offsets")
     if not off:
@@ -51,12 +57,15 @@ def _features(
 ) -> tuple[list[SentenceFeatures], dict[str, list[Signal]]]:
     weights = policy["fusion"]["signal_weights"]
     carriers = set(policy["fusion"]["carrier_signals"])
+    use = components(policy)
     per_sentence = {s.sentence_id: [g for g in signals if _overlaps(g, s)] for s in sentences}
+    if not use["layout"]:  # ablation: ignore hiding/carrier/Unicode-payload evidence
+        weights, carriers = {}, set()
 
     texts: list[list[str]] = []
     for s in sentences:
         payloads = [g.detail["decoded"] for g in per_sentence[s.sentence_id]
-                    if g.detail.get("decoded")]
+                    if g.detail.get("decoded")] if use["layout"] else []
         texts.append([s.text, *payloads])
     flat = [t for group in texts for t in group]
     probs = list(clf.predict_proba(flat)) if flat else []
@@ -65,7 +74,8 @@ def _features(
     for s, group in zip(sentences, texts, strict=True):
         p = [float(x) for x in probs[k:k + len(group)]]
         k += len(group)
-        ling = [linguistic.score_text(t) for t in group]
+        ling = ([linguistic.score_text(t) for t in group] if use["linguistic"]
+                else [linguistic.LinguisticResult(0.0)])
         sigs = per_sentence[s.sentence_id]
         hiding_types = sorted({g.type for g in sigs if g.type in weights})
         feats.append(SentenceFeatures(
@@ -146,7 +156,7 @@ def _screen(ingest: IngestResult, policy: dict[str, Any], clf: Any, guard: Guard
             escalated.extend(members)
 
     guard_scores: dict[int, float] = {}
-    if escalated:
+    if escalated and components(policy)["guard"]:
         texts, owners, contexts = [], [], []
         for j in escalated:
             neighbours = " ".join(feats[n].text for n in (j - 1, j + 1) if 0 <= n < len(feats))

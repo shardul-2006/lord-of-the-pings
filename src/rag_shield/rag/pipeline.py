@@ -13,6 +13,7 @@ from typing import Any
 
 import pdfplumber
 
+from rag_shield import timing
 from rag_shield.models import Chunk, IndexInfo, ScreenedChunk, Trace
 from rag_shield.rag.embedder import Embedder, HashEmbedder
 from rag_shield.rag.llm import CONTEXT_BEGIN, CONTEXT_END, LLMClient
@@ -125,11 +126,14 @@ class RagPipeline:
     ) -> Trace:
         from rag_shield.layer3.spotlight import spotlight
 
-        qvec = self.embedder.embed([question])[0]
-        hits = self.store.query(namespace, qvec, self.top_k)
-        spot = spotlight(hits, spotlight_tier) if spotlight_tier else None
-        context = spot.text if spot else "\n".join(f"[{h.chunk_id}] {h.text}" for h in hits)
-        prompt = PROMPT_TEMPLATE.format(question=question, context=context)
+        with timing.stage("query_path"):
+            qvec = self.embedder.embed([question])[0]
+            hits = self.store.query(namespace, qvec, self.top_k)
+            spot = spotlight(hits, spotlight_tier) if spotlight_tier else None
+            context = spot.text if spot else "\n".join(f"[{h.chunk_id}] {h.text}" for h in hits)
+            prompt = PROMPT_TEMPLATE.format(question=question, context=context)
+        with timing.stage("llm_generation"):
+            output = llm.generate(prompt)
         return Trace(
             branch=namespace,
             doc_sha256=doc_sha256,
@@ -137,7 +141,7 @@ class RagPipeline:
             prompt=prompt,
             model=llm.model_id,
             settings=self.settings(llm),
-            output=llm.generate(prompt),
+            output=output,
             defense=defense,
             spotlight=spot.meta() if spot else None,
         )
