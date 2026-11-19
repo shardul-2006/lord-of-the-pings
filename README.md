@@ -76,7 +76,9 @@ python -m rag_shield.cli compare data/fixtures/smoke_poisoned.pdf --llm real
 ```
 OpenAI-compatible APIs also work (`RAG_SHIELD_LLM=openai`, `OPENAI_API_KEY`). In our first real
 run Llama 3.1 8B did **not** follow the hidden instruction (0/3), so the demo shows the attack
-with MockLLM.
+with MockLLM. On the Phase 11 evasion set (56 documents, `PHASE11.md`) it never recommended the
+candidate as CEO; 3/56 undefended and 2/56 defended answers adopted the payload's framing
+(labelled by an AI reviewer, `eval/evasion_manual_review.json`; not yet human-checked).
 
 ## Honest limits
 - Results come from small synthetic sets (25 + 25 resumes, 1,000 dataset rows) and a
