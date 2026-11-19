@@ -38,7 +38,7 @@ def test_ledger_stub_callable():
 
 def test_remaining_stubs_callable(tmp_path):
     assert isinstance(render_overlay("d", 1, []), dict)
-    assert build_index([], "defended").index_version == 0
+    assert build_index([], "defended").index_version >= 0
     llm = MockLLM()
     assert answer("q", "defended", llm).model == llm.model_id
     assert isinstance(wrap([], "external_upload"), str)

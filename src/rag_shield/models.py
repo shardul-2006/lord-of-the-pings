@@ -112,6 +112,16 @@ class ScreenedChunk(_Record):
 
 
 @dataclass
+class Chunk(_Record):
+    """An unscreened chunk (vulnerable path). Defended retrieval uses ScreenedChunk only."""
+
+    chunk_id: str
+    doc_id: str
+    text: str
+    source_span_ids: list[str] = field(default_factory=list)
+
+
+@dataclass
 class GuardResult(_Record):
     status: str  # "ok" | "unsupported" | "scan_failed"
     reason: str
