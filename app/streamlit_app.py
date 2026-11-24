@@ -1234,11 +1234,44 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-main_tab_docs, main_tab_dataset, main_tab_arch = st.tabs([
+# Launch banner for modern React console
+st.markdown(
+    f"""
+    <div style="display:flex;justify-content:space-between;align-items:center;background:#0b1329;border:1px solid #3b82f6;padding:12px 20px;border-radius:8px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+            {SVG_SHIELD_LOGO}
+            <div>
+                <strong style="color:#f8fafc;font-size:0.92rem;">Modern React Console is running at <a href="http://localhost:8000" target="_blank" style="color:#60a5fa;text-decoration:underline;">http://localhost:8000</a></strong>
+                <div style="font-size:0.75rem;color:#94a3b8;">Interactive drag-and-drop, animated findings telemetry, real-time arena comparison, and dataset screening.</div>
+            </div>
+        </div>
+        <a href="http://localhost:8000" target="_blank" style="background:#2563eb;color:#ffffff;padding:8px 16px;border-radius:6px;font-weight:600;font-size:0.82rem;text-decoration:none;white-space:nowrap;">
+            Open React Console (Port 8000) &rarr;
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+main_tab_react, main_tab_docs, main_tab_dataset, main_tab_arch = st.tabs([
+    "Modern React Console (Live)",
     "Document Security Console",
     "Dataset Gate (Pre-Retrieval)",
     "Threat Model & Specifications",
 ])
+
+with main_tab_react:
+    st.markdown(
+        """
+        <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:0.84rem;color:#94a3b8;">Live React application served from <code>http://localhost:8000</code></span>
+            <a href="http://localhost:8000" target="_blank" style="font-size:0.82rem;color:#3b82f6;font-weight:600;text-decoration:none;">Open Fullscreen &rarr;</a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    import streamlit.components.v1 as components
+    components.iframe("http://localhost:8000", height=950, scrolling=True)
 
 with main_tab_docs:
     documents_tab(shield_, tier_, llm_, reviewer_)
