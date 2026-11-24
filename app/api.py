@@ -19,7 +19,9 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from rag_shield import __version__
@@ -33,6 +35,95 @@ from rag_shield.shield import ATLAS_TAG, OWASP_TAG, Shield
 
 UPLOAD_PREFIX = "rag_shield_upload_"
 CHUNK = 1 << 16
+
+REPO = Path(__file__).resolve().parent.parent
+FIXTURES = REPO / "data" / "fixtures"
+DEMO_DATASET = REPO / "data" / "synthetic_dataset" / "poisoned.jsonl"
+FRONTEND_DIST = REPO / "frontend" / "dist"
+
+SAMPLES: dict[str, dict[str, Any]] = {
+    "smoke_poisoned.pdf": {
+        "label": "Poisoned resume: hidden 0.5 pt white text",
+        "file": "smoke_poisoned.pdf",
+        "title": "Sub-Point White Text",
+        "tag": "Physical Hiding",
+        "badge_color": "#ef4444",
+        "vector": "0.5 pt white font hidden on white page directing the LLM to recommend candidate as CEO.",
+        "layer": "Layer 1 + 2",
+    },
+    "visible_injection.pdf": {
+        "label": "Visible injected instruction",
+        "file": "visible_injection.pdf",
+        "title": "Visible Directive Override",
+        "tag": "Direct Instruction",
+        "badge_color": "#dc2626",
+        "vector": "Unhidden prompt injection directive overriding evaluation rubric and hiring decision.",
+        "layer": "Layer 2",
+    },
+    "off_page.pdf": {
+        "label": "Text placed off the page",
+        "file": "off_page.pdf",
+        "title": "Off-Canvas Text",
+        "tag": "Layout Anomaly",
+        "badge_color": "#f59e0b",
+        "vector": "Malicious payload placed outside printable canvas coordinates [x < 0 or y > page].",
+        "layer": "Layer 1",
+    },
+    "metadata_payload.pdf": {
+        "label": "Instruction in PDF metadata",
+        "file": "metadata_payload.pdf",
+        "title": "Carrier Metadata Injection",
+        "tag": "Metadata Carrier",
+        "badge_color": "#8b5cf6",
+        "vector": "Injection hidden inside PDF document metadata attributes (/Title, /Subject, /Author).",
+        "layer": "Layer 1 + 2",
+    },
+    "hidden_comment.md": {
+        "label": "Hidden comment in Markdown",
+        "file": "hidden_comment.md",
+        "title": "Markdown HTML Comment",
+        "tag": "Concealed Markup",
+        "badge_color": "#ec4899",
+        "vector": "Instruction disguised inside HTML comment tags <!-- SYSTEM: ... --> in Markdown.",
+        "layer": "Layer 1",
+    },
+    "smoke_trigger_words.pdf": {
+        "label": "Clean resume with trigger words (system override...)",
+        "file": "smoke_trigger_words.pdf",
+        "title": "Clean Resume (Trigger Words)",
+        "tag": "False Positive Baseline",
+        "badge_color": "#10b981",
+        "vector": "Legitimate engineering resume containing trigger words ('override', 'system prompt').",
+        "layer": "Safe Pass",
+    },
+    "smoke_clean.pdf": {
+        "label": "Clean resume",
+        "file": "smoke_clean.pdf",
+        "title": "Clean Resume",
+        "tag": "Pure Baseline",
+        "badge_color": "#059669",
+        "vector": "Standard authentic software engineer resume with normal layout and verified facts.",
+        "layer": "Safe Pass",
+    },
+    "encrypted.pdf": {
+        "label": "Encrypted PDF (blocked)",
+        "file": "encrypted.pdf",
+        "title": "Encrypted / Password-Protected",
+        "tag": "Fail-Closed Guard",
+        "badge_color": "#64748b",
+        "vector": "Encrypted PDF file; scanner guard blocks from ingestion to prevent un-scanned bypass.",
+        "layer": "Scanner Guard",
+    },
+    "not_a_pdf.pdf": {
+        "label": "Text file named .pdf (blocked)",
+        "file": "not_a_pdf.pdf",
+        "title": "Spoofed Extension (.pdf)",
+        "tag": "Magic-Byte Verification",
+        "badge_color": "#64748b",
+        "vector": "Plain text renamed to .pdf; fails binary magic-byte verification.",
+        "layer": "Scanner Guard",
+    },
+}
 
 
 class AskRequest(BaseModel):
@@ -71,6 +162,13 @@ def create_app(
     if upload_dir:
         upload_dir.mkdir(parents=True, exist_ok=True)
     api = FastAPI(title="RAG-Shield", version=__version__)
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     api.state.shield = shield
 
     def _doc(doc_id: str) -> dict[str, Any]:
@@ -85,6 +183,40 @@ def create_app(
                 "policy_version": shield.policy["version"], "tier": shield.policy["tier"],
                 "guard": shield.guard.model_id,
                 "real_llm_configured": bool(os.environ.get("RAG_SHIELD_LLM"))}
+
+    @api.get("/samples")
+    def list_samples() -> list[dict[str, Any]]:
+        return list(SAMPLES.values())
+
+    @api.post("/samples/{sample_name}/ingest")
+    def ingest_sample(sample_name: str) -> dict[str, Any]:
+        if sample_name not in SAMPLES:
+            raise HTTPException(404, f"unknown sample fixture {sample_name}")
+        path = FIXTURES / sample_name
+        if not path.exists():
+            raise HTTPException(404, f"fixture file missing on disk: {sample_name}")
+        result = shield.ingest(path, source_name=path.name)
+        return {**result.to_dict(), "filename": path.name}
+
+    @api.post("/demo-dataset/screen")
+    def screen_demo_dataset() -> dict[str, Any]:
+        if not DEMO_DATASET.exists():
+            raise HTTPException(404, "demo dataset missing: run python scripts/make_poisoned_dataset.py")
+        tmp = Path(tempfile.mkdtemp(prefix="rag_shield_demo_ds_"))
+        try:
+            rep = shield.screen_dataset(DEMO_DATASET, tmp / "out")
+            summary = {k: v for k, v in rep.to_dict().items() if k not in ("report_path", "out_dir")}
+            if rep.status != "completed":
+                return {"summary": summary, "report": None, "screened": [], "quarantined": []}
+            out = tmp / "out"
+            return {
+                "summary": summary,
+                "report": json.loads((out / "report.json").read_text(encoding="utf-8")),
+                "screened": [json.loads(x) for x in (out / "screened.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()],
+                "quarantined": [json.loads(x) for x in (out / "quarantined.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()],
+            }
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     @api.post("/ingest")
     async def ingest(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
@@ -202,5 +334,19 @@ def create_app(
             raise HTTPException(400, "no stored original for this document")
         return integrity_check(body.task, doc["forensic_path"], get_llm(body.llm),
                                runs=body.runs).to_dict()
+
+    if FRONTEND_DIST.exists():
+        api.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+        @api.get("/", include_in_schema=False)
+        def index():
+            return FileResponse(FRONTEND_DIST / "index.html")
+
+        @api.get("/{full_path:path}", include_in_schema=False)
+        def spa_fallback(full_path: str):
+            candidate = FRONTEND_DIST / full_path
+            if candidate.is_file():
+                return FileResponse(candidate)
+            return FileResponse(FRONTEND_DIST / "index.html")
 
     return api
