@@ -26,10 +26,12 @@ def screen_dataset_bytes(shield: Shield, name: str, data: bytes) -> dict:
         path = tmp / f"dataset{Path(name).suffix.lower()}"
         path.write_bytes(data)
         rep = shield.screen_dataset(path, tmp / "out")
-        out = {"summary": rep.to_dict(), "report": None, "screened": ""}
+        out = {"summary": rep.to_dict(), "report": None, "screened": "", "quarantined": ""}
         if rep.status == "completed":
             out["report"] = json.loads((tmp / "out" / "report.json").read_text(encoding="utf-8"))
             out["screened"] = (tmp / "out" / "screened.jsonl").read_text(encoding="utf-8")
+            quar_file = tmp / "out" / "quarantined.jsonl"
+            out["quarantined"] = quar_file.read_text(encoding="utf-8") if quar_file.exists() else ""
         return out
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

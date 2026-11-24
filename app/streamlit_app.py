@@ -21,6 +21,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from app.uploads import ingest_bytes, screen_dataset_bytes  # noqa: E402
+from rag_shield.adapters import domains, get_adapter  # noqa: E402
 from rag_shield.integrity.decision_check import check as integrity_check  # noqa: E402
 from rag_shield.rag.compare import answer_both  # noqa: E402
 from rag_shield.rag.llm import get_llm  # noqa: E402
@@ -560,7 +561,7 @@ def documents_tab(shield: Shield, tier: str, llm_choice: str, reviewer: str) -> 
         f"Blocked: {result.get('reason', 'Unsupported File')}" if status in BLOCKED
         else f"Threat Isolated: {len(quarantined_ids)} Malicious Sentence(s) Quarantined" if status == "flagged"
         else f"Operator Review Required: {len(review_ids)} Sentence(s) Held" if status == "review_required"
-        else "Verified Clean: 100% Genuine Document Facts Preserved"
+        else "Verified Clean: Permitted Document Facts Retained in Defended Index"
     )
 
     st.markdown("---")
@@ -950,23 +951,46 @@ def documents_tab(shield: Shield, tier: str, llm_choice: str, reviewer: str) -> 
     with t_integrity:
         st.markdown("##### Downstream Decision Integrity Simulation")
         st.write(
-            "Tests whether quarantined sentences possess the power to alter downstream high-stakes decisions "
-            "(e.g., candidate hiring score). Runs counterfactual scoring across seeded trials."
+            "Tests whether quarantined sentences possess the power to alter downstream high-stakes decisions. "
+            "Runs counterfactual scoring across seeded trials with and without suspicious passages, validated against a benign-removal control baseline."
         )
+
+        c_dom, c_task = st.columns([1.2, 2.0])
+        with c_dom:
+            available_domains = ["hr", "paper_review"]
+            domain_labels = {
+                "hr": "HR Screening (Software Engineer)",
+                "paper_review": "Academic Paper Review (Venue Publication)",
+            }
+            selected_domain_key = st.selectbox(
+                "Evaluation Domain",
+                options=available_domains,
+                format_func=lambda k: domain_labels.get(k, k),
+                key="integrity_domain_selector",
+            )
+            adapter = get_adapter(selected_domain_key)
+        with c_task:
+            task_input = st.text_input(
+                "Integrity Decision Task",
+                value=adapter.integrity_task,
+                key="integrity_task_input",
+                help="The downstream decision task evaluated with and without suspicious passages.",
+            )
 
         run_integrity = st.toggle("Execute Decision Steering Check", key="integrity")
         if run_integrity and doc.get("forensic_path"):
-            with st.spinner("Executing counterfactual scoring simulation..."):
+            with st.spinner(f"Executing counterfactual scoring simulation ({selected_domain_key})..."):
                 r = integrity_check(
-                    "Score this candidate for a software engineer role",
+                    task_input,
                     doc["forensic_path"],
                     get_llm(llm_choice),
+                    policy=adapter.policy if adapter.policy else None,
                 )
             c_m1, c_m2 = st.columns([1, 2])
             with c_m1:
                 st.metric(
                     r.label,
-                    "yes" if r.possible_decision_influence else "no",
+                    "Influence Detected" if r.possible_decision_influence else "No Influence",
                     delta=f"{r.delta:+.1f} points",
                     delta_color="inverse" if r.possible_decision_influence else "normal",
                 )
@@ -976,11 +1000,47 @@ def documents_tab(shield: Shield, tier: str, llm_choice: str, reviewer: str) -> 
                     <div style="background:#0f172a;border:1px solid #1e293b;padding:14px;border-radius:8px;">
                         <strong style="color:#f8fafc;">Evaluation Verdict:</strong>
                         <div style="font-size:0.86rem;color:#cbd5e1;margin-top:4px;">{r.reason}</div>
-                        <div style="font-size:0.75rem;color:#64748b;margin-top:6px;">Status: <code>{r.status}</code> &middot; Runs per condition: {r.variance.get('runs_per_condition', 3)}</div>
+                        <div style="font-size:0.75rem;color:#64748b;margin-top:6px;">Status: <code>{r.status}</code> &middot; Runs per condition: {r.variance.get('runs_per_condition', 3)} &middot; Threshold: {r.threshold}</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
+
+            if r.passages:
+                st.markdown("###### Per-Passage Counterfactual Sensitivity Breakdown")
+                passage_rows = []
+                for p in r.passages:
+                    sids = ", ".join(p.get("removed_sentence_ids", []))
+                    w_mean = p.get("with", {}).get("mean", 0.0)
+                    wo_mean = p.get("without", {}).get("mean", 0.0)
+                    delta = p.get("delta", 0.0)
+                    passage_rows.append({
+                        "Tested Sentences": sids,
+                        "Score With Passage": f"{w_mean:.1f}",
+                        "Score Without": f"{wo_mean:.1f}",
+                        "Score Delta": f"{delta:+.1f}",
+                        "Sample Text Preview": (p.get("removed_text", [""])[0] or "")[:80] + "...",
+                    })
+                st.dataframe(passage_rows, hide_index=True, use_container_width=True)
+
+            if r.control and r.control.get("enabled"):
+                st.markdown("###### Benign-Removal Negative Control Baseline")
+                c_ctrl = r.control
+                max_ctrl = c_ctrl.get("max_abs_delta", 0.0)
+                st.caption(
+                    f"To prevent penalizing ordinary qualifications, ordinary sentences were removed as negative controls. "
+                    f"Max benign delta swing observed: **{max_ctrl:.1f} points**."
+                )
+                if c_ctrl.get("passages"):
+                    ctrl_rows = [
+                        {
+                            "Sentence ID": cp.get("removed_sentence_id"),
+                            "Control Delta Swing": f"{cp.get('delta', 0.0):+.1f}",
+                            "Sentence Text": cp.get("removed_text", "")[:75] + "...",
+                        }
+                        for cp in c_ctrl["passages"]
+                    ]
+                    st.dataframe(ctrl_rows, hide_index=True, use_container_width=True)
 
     # --------------------------------------------------------------------------
     # SUB-TAB 6: AUDIT REPORT & EXPORT
@@ -1105,7 +1165,7 @@ def dataset_tab(shield: Shield) -> None:
         st.markdown("##### Flagged Rows Sample")
         st.dataframe(ds["report"]["samples"], hide_index=True, use_container_width=True)
 
-    d_col1, d_col2 = st.columns(2)
+    d_col1, d_col2, d_col3 = st.columns(3)
     with d_col1:
         st.download_button(
             "Download report.json",
@@ -1119,6 +1179,14 @@ def dataset_tab(shield: Shield) -> None:
             "Download screened.jsonl (Clean Corpus)",
             ds["screened"],
             file_name="screened.jsonl",
+            mime="application/json",
+            use_container_width=True,
+        )
+    with d_col3:
+        st.download_button(
+            "Download quarantined.jsonl (Poison Rows)",
+            ds.get("quarantined", ""),
+            file_name="quarantined.jsonl",
             mime="application/json",
             use_container_width=True,
         )

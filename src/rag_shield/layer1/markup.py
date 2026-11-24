@@ -67,12 +67,28 @@ _BLOCK = frozenset(
 )
 _VOID = frozenset("area base br col embed hr img input link meta param source track wbr".split())
 _SKIP = frozenset(("script", "style", "noscript", "template"))
-_HIDDEN_STYLE = ("display:none", "visibility:hidden", "font-size:0")
+_HIDDEN_STYLE = (
+    "display:none",
+    "visibility:hidden",
+    "font-size:0",
+    "opacity:0",
+    "color:transparent",
+    "color:rgba(0,0,0,0)",
+    "position:absolute;left:-",
+    "position:fixed;left:-",
+    "text-indent:-",
+    "max-height:0",
+    "height:0;overflow:hidden",
+)
 
 
 def _is_hidden(attrs: dict[str, str | None]) -> bool:
     style = (attrs.get("style") or "").replace(" ", "").lower()
-    return "hidden" in attrs or any(h in style for h in _HIDDEN_STYLE)
+    return (
+        "hidden" in attrs
+        or attrs.get("aria-hidden") == "true"
+        or any(h in style for h in _HIDDEN_STYLE)
+    )
 
 
 class _HtmlExtractor(HTMLParser):
