@@ -7,13 +7,22 @@ import { PostureCard } from '../components/PostureCard'
 import { MetricCard } from '../components/MetricCard'
 import { FindingCard } from '../components/FindingCard'
 import { StatusBadge } from '../components/StatusBadge'
-import { SearchIcon, Loader, ShieldIcon } from '../components/icons'
+import {
+  SearchIcon, Loader, ShieldIcon, RadarIcon, SwordsIcon,
+  EyeIcon, UserCheckIcon, ActivityIcon, DownloadIcon, CrosshairIcon,
+} from '../components/icons'
 import { ToastContainer, type ToastMessage } from '../components/Toast'
 
 type SubTab = 'findings' | 'arena' | 'evidence' | 'review' | 'integrity' | 'export'
+type SampleCategory = 'all' | 'attack' | 'baseline' | 'guard'
+
 const BLOCKED: ScanStatus[] = ['unsupported', 'scan_failed']
 
-const DEFAULT_SAMPLES: SampleInfo[] = [
+interface ExtendedSample extends SampleInfo {
+  category: Exclude<SampleCategory, 'all'>
+}
+
+const DEFAULT_SAMPLES: ExtendedSample[] = [
   {
     label: "Poisoned resume: hidden 0.5 pt white text",
     file: "smoke_poisoned.pdf",
@@ -22,6 +31,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#ef4444",
     vector: "0.5 pt white font hidden on white page directing the LLM to recommend candidate as CEO.",
     layer: "Layer 1 + 2",
+    category: "attack",
   },
   {
     label: "Visible injected instruction",
@@ -31,6 +41,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#dc2626",
     vector: "Unhidden prompt injection directive overriding evaluation rubric and hiring decision.",
     layer: "Layer 2",
+    category: "attack",
   },
   {
     label: "Text placed off the page",
@@ -40,6 +51,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#f59e0b",
     vector: "Malicious payload placed outside printable canvas coordinates [x < 0 or y > page].",
     layer: "Layer 1",
+    category: "attack",
   },
   {
     label: "Instruction in PDF metadata",
@@ -49,6 +61,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#8b5cf6",
     vector: "Injection hidden inside PDF document metadata attributes (/Title, /Subject, /Author).",
     layer: "Layer 1 + 2",
+    category: "attack",
   },
   {
     label: "Hidden comment in Markdown",
@@ -58,6 +71,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#ec4899",
     vector: "Instruction disguised inside HTML comment tags <!-- SYSTEM: ... --> in Markdown.",
     layer: "Layer 1",
+    category: "attack",
   },
   {
     label: "Clean resume with trigger words (system override...)",
@@ -67,6 +81,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#10b981",
     vector: "Legitimate engineering resume containing trigger words ('override', 'system prompt').",
     layer: "Safe Pass",
+    category: "baseline",
   },
   {
     label: "Clean resume",
@@ -76,6 +91,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#059669",
     vector: "Standard authentic software engineer resume with normal layout and verified facts.",
     layer: "Safe Pass",
+    category: "baseline",
   },
   {
     label: "Encrypted PDF (blocked)",
@@ -85,6 +101,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#64748b",
     vector: "Encrypted PDF file; scanner guard blocks from ingestion to prevent un-scanned bypass.",
     layer: "Scanner Guard",
+    category: "guard",
   },
   {
     label: "Text file named .pdf (blocked)",
@@ -94,6 +111,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#64748b",
     vector: "Plain text renamed to .pdf; fails binary magic-byte verification.",
     layer: "Scanner Guard",
+    category: "guard",
   },
 ]
 
@@ -110,6 +128,7 @@ interface Props {
 export function DocumentConsole({ config }: Props) {
   const [scanning, setScanning] = useState(false)
   const [filename, setFilename] = useState('')
+  const [sampleCategory, setSampleCategory] = useState<SampleCategory>('all')
   const [selectedSample, setSelectedSample] = useState<string>('smoke_poisoned.pdf')
   const [result, setResult] = useState<IngestResult | null>(null)
   const [doc, setDoc] = useState<DocumentMeta | null>(null)
@@ -277,7 +296,8 @@ export function DocumentConsole({ config }: Props) {
     }
   }, [result, integrityDomain, config.llm])
 
-  const sampleDetails = DEFAULT_SAMPLES.find(s => s.file === selectedSample)
+  const visibleSamples = DEFAULT_SAMPLES.filter(s => sampleCategory === 'all' || s.category === sampleCategory)
+  const sampleDetails = DEFAULT_SAMPLES.find(s => s.file === selectedSample) || visibleSamples[0]
   const withheldMap = Object.fromEntries(withheld.map(w => [w.sentence_id, w]))
   const quarantinedIds = result?.quarantined_ids || []
   const reviewIds = result?.review_ids || []
@@ -297,12 +317,21 @@ export function DocumentConsole({ config }: Props) {
     return true
   })
 
+  const subTabItems: { key: SubTab; label: string; Icon: typeof RadarIcon; badge?: number }[] = [
+    { key: 'findings', label: 'Sentence Findings', Icon: RadarIcon, badge: findings.length },
+    { key: 'arena', label: 'Vulnerable vs. Defended', Icon: SwordsIcon },
+    { key: 'evidence', label: 'PDF Evidence', Icon: EyeIcon },
+    { key: 'review', label: 'Review Queue', Icon: UserCheckIcon, badge: withheld.length },
+    { key: 'integrity', label: 'Integrity Lab', Icon: ActivityIcon },
+    { key: 'export', label: 'Audit Export', Icon: DownloadIcon },
+  ]
+
   return (
     <div className="console-page">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <div className="page-header-row">
-        <div>
+        <div className="page-title-block">
           <h2 className="page-title">Document Ingestion &amp; Security Screening</h2>
           <p className="page-desc">
             Surgically quarantine indirect prompt injections at the sentence level while indexing authentic facts.
@@ -318,25 +347,59 @@ export function DocumentConsole({ config }: Props) {
         <div className="sample-card hud-box">
           <span className="hud-corner hud-corner--tl" />
           <span className="hud-corner hud-corner--tr" />
+          <span className="hud-corner hud-corner--bl" />
+          <span className="hud-corner hud-corner--br" />
           <div className="card-badge-row">
-            <h3 className="section-title">Preset Attack Library</h3>
+            <div className="card-title-with-icon">
+              <CrosshairIcon size={16} color="#60a5fa" />
+              <h3 className="section-title">Preset Attack Library</h3>
+            </div>
             <span className="fixture-count-pill">9 Fixtures</span>
           </div>
           <p className="field-hint" style={{ marginBottom: 10 }}>
             Curated attack vectors testing physical hiding, directives, and fail-closed security.
           </p>
 
-          <select
-            className="field-select"
-            value={selectedSample}
-            onChange={(e) => setSelectedSample(e.target.value)}
-          >
-            {DEFAULT_SAMPLES.map((s) => (
-              <option key={s.file} value={s.file}>
-                {s.label}
-              </option>
+          <div className="category-filter-pills" role="tablist" aria-label="Fixture categories">
+            {([
+              ['all', 'All (9)'],
+              ['attack', 'Attacks (5)'],
+              ['baseline', 'Baselines (2)'],
+              ['guard', 'Guards (2)'],
+            ] as [SampleCategory, string][]).map(([cat, label]) => (
+              <button
+                key={cat}
+                type="button"
+                className={`cat-pill ${sampleCategory === cat ? `active cat-pill--${cat}` : ''}`}
+                onClick={() => {
+                  setSampleCategory(cat)
+                  const first = DEFAULT_SAMPLES.find(s => cat === 'all' || s.category === cat)
+                  if (first) setSelectedSample(first.file)
+                }}
+              >
+                {label}
+              </button>
             ))}
-          </select>
+          </div>
+
+          <div className="sample-selector-grid">
+            {visibleSamples.map((s) => {
+              const active = selectedSample === s.file
+              return (
+                <button
+                  key={s.file}
+                  type="button"
+                  className={`sample-chip-option ${active ? 'active' : ''}`}
+                  style={{ '--chip-color': s.badge_color } as React.CSSProperties}
+                  onClick={() => setSelectedSample(s.file)}
+                >
+                  <span className="sample-chip-dot" style={{ background: s.badge_color }} />
+                  <span className="sample-chip-title">{s.title}</span>
+                  <span className="sample-chip-layer">{s.layer}</span>
+                </button>
+              )
+            })}
+          </div>
 
           {sampleDetails && (
             <div className="sample-preview fade-in">
@@ -355,7 +418,7 @@ export function DocumentConsole({ config }: Props) {
               </div>
               <p className="sample-vector">{sampleDetails.vector}</p>
               <div className="sample-layer">
-                Target Defense Layer: <code>{sampleDetails.layer}</code>
+                Target Defense Layer: <code>{sampleDetails.layer}</code> &middot; File: <code>{sampleDetails.file}</code>
               </div>
             </div>
           )}
@@ -377,8 +440,13 @@ export function DocumentConsole({ config }: Props) {
         <div className="upload-card hud-box">
           <span className="hud-corner hud-corner--tl" />
           <span className="hud-corner hud-corner--tr" />
+          <span className="hud-corner hud-corner--bl" />
+          <span className="hud-corner hud-corner--br" />
           <div className="card-badge-row">
-            <h3 className="section-title">Upload Custom Document</h3>
+            <div className="card-title-with-icon">
+              <ShieldIcon size={16} color="#60a5fa" />
+              <h3 className="section-title">Upload Custom Document</h3>
+            </div>
             <span className="fixture-count-pill">PDF &middot; MD &middot; HTML</span>
           </div>
           <p className="field-hint" style={{ marginBottom: 10 }}>
@@ -434,21 +502,18 @@ export function DocumentConsole({ config }: Props) {
                 />
               </div>
 
-              <div className="subtab-nav">
-                {([
-                  ['findings', 'Sentence Findings & Radar'],
-                  ['arena', 'Vulnerable vs. Defended Arena'],
-                  ['evidence', 'PDF Evidence Overlay'],
-                  ['review', 'Human Review Queue'],
-                  ['integrity', 'Decision Integrity Lab'],
-                  ['export', 'Forensic Audit Report'],
-                ] as [SubTab, string][]).map(([key, label]) => (
+              <div className="subtab-nav" role="tablist">
+                {subTabItems.map(({ key, label, Icon, badge }) => (
                   <button
                     key={key}
                     className={`subtab ${subTab === key ? 'active' : ''}`}
                     onClick={() => setSubTab(key)}
                   >
-                    {label}
+                    <Icon size={14} />
+                    <span>{label}</span>
+                    {typeof badge === 'number' && badge > 0 && (
+                      <span className="subtab-badge">{badge}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -467,17 +532,23 @@ export function DocumentConsole({ config }: Props) {
                           onChange={e => setSearchQuery(e.target.value)}
                         />
                       </div>
-                      <select
-                        className="field-select"
-                        style={{ width: 'auto' }}
-                        value={filterMode}
-                        onChange={e => setFilterMode(e.target.value)}
-                      >
-                        <option value="all">All Dispositions</option>
-                        <option value="quarantined">Quarantined Only</option>
-                        <option value="review">Review Required</option>
-                        <option value="clean">Clean Facts Only</option>
-                      </select>
+                      <div className="disposition-pills">
+                        {([
+                          ['all', 'All'],
+                          ['quarantined', 'Quarantined'],
+                          ['review', 'Review'],
+                          ['clean', 'Clean'],
+                        ] as [string, string][]).map(([val, lbl]) => (
+                          <button
+                            key={val}
+                            type="button"
+                            className={`disp-pill ${filterMode === val ? `active disp-pill--${val}` : ''}`}
+                            onClick={() => setFilterMode(val)}
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="findings-meta-bar">
@@ -524,7 +595,7 @@ export function DocumentConsole({ config }: Props) {
                       {ARENA_PROMPTS.map((p, idx) => (
                         <button
                           key={idx}
-                          className="prompt-chip-btn"
+                          className={`prompt-chip-btn ${question === p.prompt ? 'active' : ''}`}
                           onClick={() => setQuestion(p.prompt)}
                         >
                           {p.label}
@@ -664,21 +735,34 @@ export function DocumentConsole({ config }: Props) {
                     </p>
 
                     <div className="integrity-controls hud-box">
-                      <div className="domain-select-row">
-                        <label className="field-label">Evaluation Domain:</label>
-                        <select
-                          className="field-select"
-                          value={integrityDomain}
-                          onChange={e => setIntegrityDomain(e.target.value as any)}
+                      <label className="field-label">Evaluation Domain</label>
+                      <div className="option-pill-group" style={{ maxWidth: 540, marginBottom: 12 }}>
+                        <button
+                          type="button"
+                          className={`option-card-btn ${integrityDomain === 'hr' ? 'active active--blue' : ''}`}
+                          onClick={() => setIntegrityDomain('hr')}
                         >
-                          <option value="hr">HR Candidate Screening (Software Engineer)</option>
-                          <option value="paper_review">Academic Paper Review (Venue Publication)</option>
-                        </select>
+                          <div className="option-card-top">
+                            <span className="option-card-title">HR Candidate Screening</span>
+                            <span className="option-card-code">SWE</span>
+                          </div>
+                          <span className="option-card-sub">Score candidate fit &amp; bias delta</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`option-card-btn ${integrityDomain === 'paper_review' ? 'active active--purple' : ''}`}
+                          onClick={() => setIntegrityDomain('paper_review')}
+                        >
+                          <div className="option-card-top">
+                            <span className="option-card-title">Academic Paper Review</span>
+                            <span className="option-card-code">VENUE</span>
+                          </div>
+                          <span className="option-card-sub">Test publication steering delta</span>
+                        </button>
                       </div>
 
                       <button
                         className="btn btn--primary btn--glow"
-                        style={{ marginTop: 12 }}
                         onClick={handleRunIntegrity}
                         disabled={integrityLoading}
                       >
@@ -745,8 +829,19 @@ export function DocumentConsole({ config }: Props) {
       )}
 
       {!result && !scanning && (
-        <div className="empty-state fade-in">
-          Choose a preset attack sample or drop a custom file above to initiate automated security inspection.
+        <div className="empty-state empty-state--pipeline fade-in">
+          <div className="empty-pipeline-steps">
+            <span className="empty-step-pill"><strong>01</strong> Magic-Byte Guard</span>
+            <span className="empty-step-arrow">&rarr;</span>
+            <span className="empty-step-pill"><strong>02</strong> Geometric Hiding Scan</span>
+            <span className="empty-step-arrow">&rarr;</span>
+            <span className="empty-step-pill"><strong>03</strong> Sentence Risk Fusion</span>
+            <span className="empty-step-arrow">&rarr;</span>
+            <span className="empty-step-pill"><strong>04</strong> Defended Retrieval</span>
+          </div>
+          <p className="empty-state-sub">
+            Select a preset attack fixture or drop a custom document above to initiate automated 4-layer security screening.
+          </p>
         </div>
       )}
     </div>

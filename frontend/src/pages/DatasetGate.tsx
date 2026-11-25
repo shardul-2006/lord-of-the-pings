@@ -4,6 +4,7 @@ import * as api from '../api'
 import { DropZone } from '../components/DropZone'
 import { ScanProgress } from '../components/ScanProgress'
 import { MetricCard } from '../components/MetricCard'
+import { DatabaseIcon, ShieldIcon, DownloadIcon } from '../components/icons'
 import { ToastContainer, type ToastMessage } from '../components/Toast'
 
 interface Props {
@@ -86,7 +87,7 @@ export function DatasetGate({ config: _config }: Props) {
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <div className="page-header-row">
-        <div>
+        <div className="page-title-block">
           <h2 className="page-title">Pre-Retrieval Dataset Gate &amp; Backdoor Quarantine</h2>
           <p className="page-desc">
             Screen pre-retrieval corpora and fine-tuning datasets for backdoor triggers and poisoned text before vector embedding.
@@ -102,8 +103,13 @@ export function DatasetGate({ config: _config }: Props) {
         <div className="sample-card hud-box">
           <span className="hud-corner hud-corner--tl" />
           <span className="hud-corner hud-corner--tr" />
+          <span className="hud-corner hud-corner--bl" />
+          <span className="hud-corner hud-corner--br" />
           <div className="card-badge-row">
-            <h3 className="section-title">Pre-Configured Poisoned Demo</h3>
+            <div className="card-title-with-icon">
+              <DatabaseIcon size={16} color="#60a5fa" />
+              <h3 className="section-title">Pre-Configured Poisoned Demo</h3>
+            </div>
             <span className="fixture-count-pill">1,000 Rows</span>
           </div>
           <p className="field-hint" style={{ marginBottom: 12 }}>
@@ -113,7 +119,7 @@ export function DatasetGate({ config: _config }: Props) {
             <div className="sample-preview-header">
               <strong>Synthetic Backdoor Corpus</strong>
               <span className="sample-tag" style={{ color: '#ef4444', background: '#ef444422', border: '1px solid #ef444455' }}>
-                100% Deterministic Test
+                Deterministic Test
               </span>
             </div>
             <p className="sample-vector">
@@ -123,7 +129,7 @@ export function DatasetGate({ config: _config }: Props) {
           </div>
           <button
             className="btn btn--primary btn--glow"
-            style={{ width: '100%' }}
+            style={{ width: '100%', marginTop: 'auto' }}
             onClick={handleTestDemo}
             disabled={scanning}
           >
@@ -134,8 +140,13 @@ export function DatasetGate({ config: _config }: Props) {
         <div className="upload-card hud-box">
           <span className="hud-corner hud-corner--tl" />
           <span className="hud-corner hud-corner--tr" />
+          <span className="hud-corner hud-corner--bl" />
+          <span className="hud-corner hud-corner--br" />
           <div className="card-badge-row">
-            <h3 className="section-title">Upload Custom Corpus</h3>
+            <div className="card-title-with-icon">
+              <ShieldIcon size={16} color="#60a5fa" />
+              <h3 className="section-title">Upload Custom Corpus</h3>
+            </div>
             <span className="fixture-count-pill">CSV &middot; JSONL</span>
           </div>
           <p className="field-hint" style={{ marginBottom: 12 }}>
@@ -145,7 +156,7 @@ export function DatasetGate({ config: _config }: Props) {
         </div>
       </div>
 
-      {scanning && <ScanProgress filename={filename} stage="Screening dataset rows for backdoor triggers &amp; duplicates..." />}
+      {scanning && <ScanProgress filename={filename} stage="Screening dataset rows for backdoor triggers & duplicates..." />}
       {error && <div className="error-banner fade-in">{error}</div>}
 
       {result && result.summary.status === 'completed' && (
@@ -201,13 +212,13 @@ export function DatasetGate({ config: _config }: Props) {
 
           <div className="download-grid">
             <button className="btn btn--primary btn--glow" onClick={() => downloadFile(result.report, 'report.json')}>
-              Download report.json (Full Telemetry) &darr;
+              <DownloadIcon size={15} /> Download report.json (Full Telemetry)
             </button>
             <button className="btn btn--outline" onClick={() => downloadFile(result.screened, 'screened.jsonl')}>
-              Download screened.jsonl (Clean Corpus) &darr;
+              <DownloadIcon size={15} /> Download screened.jsonl (Clean Corpus)
             </button>
-            <button className="btn btn--outline" style={{ borderColor: '#ef4444', color: '#fca5a5' }} onClick={() => downloadFile(result.quarantined, 'quarantined.jsonl')}>
-              Download quarantined.jsonl (Poison Rows) &darr;
+            <button className="btn btn--danger-outline" onClick={() => downloadFile(result.quarantined, 'quarantined.jsonl')}>
+              <DownloadIcon size={15} /> Download quarantined.jsonl (Poison Rows)
             </button>
           </div>
         </div>
@@ -218,7 +229,20 @@ export function DatasetGate({ config: _config }: Props) {
       )}
 
       {!result && !scanning && (
-        <div className="empty-state fade-in">Upload a CSV or JSONL dataset or run the 1,000-row demo to inspect pre-retrieval screening.</div>
+        <div className="empty-state empty-state--pipeline fade-in">
+          <div className="empty-pipeline-steps">
+            <span className="empty-step-pill"><strong>01</strong> SHA-256 Exact Dedup</span>
+            <span className="empty-step-arrow">&rarr;</span>
+            <span className="empty-step-pill"><strong>02</strong> MinHash LSH Clustering</span>
+            <span className="empty-step-arrow">&rarr;</span>
+            <span className="empty-step-pill"><strong>03</strong> Masked Trigger Attribution</span>
+            <span className="empty-step-arrow">&rarr;</span>
+            <span className="empty-step-pill"><strong>04</strong> Clean Corpus Export</span>
+          </div>
+          <p className="empty-state-sub">
+            Upload a CSV or JSONL dataset or run the 1,000-row planted demo to inspect pre-retrieval corpus screening.
+          </p>
+        </div>
       )}
     </div>
   )
