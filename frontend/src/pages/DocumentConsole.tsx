@@ -21,9 +21,14 @@ import {
 import { ToastContainer, type ToastMessage } from '../components/Toast'
 
 type SubTab = 'findings' | 'arena' | 'evidence' | 'review' | 'integrity' | 'export'
+type SampleCategory = 'all' | 'attack' | 'baseline' | 'guard'
 const BLOCKED: ScanStatus[] = ['unsupported', 'scan_failed']
 
-const DEFAULT_SAMPLES: SampleInfo[] = [
+interface ExtendedSample extends SampleInfo {
+  category: Exclude<SampleCategory, 'all'>
+}
+
+const DEFAULT_SAMPLES: ExtendedSample[] = [
   {
     label: "Poisoned resume: hidden 0.5 pt white text",
     file: "smoke_poisoned.pdf",
@@ -32,6 +37,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#ef4444",
     vector: "0.5 pt white font hidden on white page directing the LLM to recommend candidate as CEO.",
     layer: "Layer 1 + 2",
+    category: "attack",
   },
   {
     label: "Visible injected instruction",
@@ -41,6 +47,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#dc2626",
     vector: "Unhidden prompt injection directive overriding evaluation rubric and hiring decision.",
     layer: "Layer 2",
+    category: "attack",
   },
   {
     label: "Text placed off the page",
@@ -50,6 +57,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#f59e0b",
     vector: "Malicious payload placed outside printable canvas coordinates [x < 0 or y > page].",
     layer: "Layer 1",
+    category: "attack",
   },
   {
     label: "Instruction in PDF metadata",
@@ -59,6 +67,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#8b5cf6",
     vector: "Injection hidden inside PDF document metadata attributes (/Title, /Subject, /Author).",
     layer: "Layer 1 + 2",
+    category: "attack",
   },
   {
     label: "Hidden comment in Markdown",
@@ -68,6 +77,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#ec4899",
     vector: "Instruction disguised inside HTML comment tags <!-- SYSTEM: ... --> in Markdown.",
     layer: "Layer 1",
+    category: "attack",
   },
   {
     label: "Clean resume with trigger words (system override...)",
@@ -77,6 +87,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#10b981",
     vector: "Legitimate engineering resume containing trigger words ('override', 'system prompt').",
     layer: "Safe Pass",
+    category: "baseline",
   },
   {
     label: "Clean resume",
@@ -86,6 +97,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#059669",
     vector: "Standard authentic software engineer resume with normal layout and verified facts.",
     layer: "Safe Pass",
+    category: "baseline",
   },
   {
     label: "Encrypted PDF (blocked)",
@@ -95,6 +107,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#64748b",
     vector: "Encrypted PDF file; scanner guard blocks from ingestion to prevent un-scanned bypass.",
     layer: "Scanner Guard",
+    category: "guard",
   },
   {
     label: "Text file named .pdf (blocked)",
@@ -104,6 +117,7 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
     badge_color: "#64748b",
     vector: "Plain text renamed to .pdf; fails binary magic-byte verification.",
     layer: "Scanner Guard",
+    category: "guard",
   },
 ]
 
@@ -120,6 +134,7 @@ interface Props {
 export function DocumentConsole({ config }: Props) {
   const [scanning, setScanning] = useState(false)
   const [filename, setFilename] = useState('')
+  const [sampleCategory, setSampleCategory] = useState<SampleCategory>('all')
   const [selectedSample, setSelectedSample] = useState<string>('smoke_poisoned.pdf')
   const [result, setResult] = useState<IngestResult | null>(null)
   const [doc, setDoc] = useState<DocumentMeta | null>(null)
@@ -295,7 +310,8 @@ export function DocumentConsole({ config }: Props) {
     }
   }, [result, integrityDomain, config.llm])
 
-  const sampleDetails = DEFAULT_SAMPLES.find(s => s.file === selectedSample)
+  const visibleSamples = DEFAULT_SAMPLES.filter(s => sampleCategory === 'all' || s.category === sampleCategory)
+  const sampleDetails = visibleSamples.find(s => s.file === selectedSample) || visibleSamples[0]
   const withheldMap = Object.fromEntries(withheld.map(w => [w.sentence_id, w]))
   const quarantinedIds = result?.quarantined_ids || []
   const reviewIds = result?.review_ids || []
@@ -345,12 +361,36 @@ export function DocumentConsole({ config }: Props) {
             Curated attack vectors testing physical hiding, directives, and fail-closed security.
           </p>
 
+          <div className="category-filter-pills" role="tablist" aria-label="Fixture categories">
+            {([
+              ['all', 'All (9)'],
+              ['attack', 'Attacks (5)'],
+              ['baseline', 'Baselines (2)'],
+              ['guard', 'Guards (2)'],
+            ] as [SampleCategory, string][]).map(([cat, label]) => (
+              <button
+                key={cat}
+                type="button"
+                role="tab"
+                aria-selected={sampleCategory === cat}
+                className={`cat-pill ${sampleCategory === cat ? `active cat-pill--${cat}` : ''}`}
+                onClick={() => {
+                  setSampleCategory(cat)
+                  const first = DEFAULT_SAMPLES.find(s => cat === 'all' || s.category === cat)
+                  if (first) setSelectedSample(first.file)
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <select
             className="field-select"
-            value={selectedSample}
+            value={sampleDetails?.file || selectedSample}
             onChange={(e) => setSelectedSample(e.target.value)}
           >
-            {DEFAULT_SAMPLES.map((s) => (
+            {visibleSamples.map((s) => (
               <option key={s.file} value={s.file}>
                 {s.label}
               </option>
