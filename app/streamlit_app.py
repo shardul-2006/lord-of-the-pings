@@ -9,9 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 
 import streamlit as st
@@ -21,7 +19,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from app.uploads import ingest_bytes, screen_dataset_bytes  # noqa: E402
-from rag_shield.adapters import domains, get_adapter  # noqa: E402
+from rag_shield.adapters import get_adapter  # noqa: E402
 from rag_shield.integrity.decision_check import check as integrity_check  # noqa: E402
 from rag_shield.rag.compare import answer_both  # noqa: E402
 from rag_shield.rag.llm import get_llm  # noqa: E402
@@ -433,7 +431,7 @@ def sidebar() -> tuple[str, str, str]:
 
         st.markdown("---")
         st.markdown("##### Status Legend")
-        for status, (_, label, meaning) in BADGES.items():
+        for status, (_, _label, meaning) in BADGES.items():
             st.markdown(
                 f"<div style='margin-bottom:6px;'>"
                 f"{badge_html(status)} <code>{status}</code><br>"
@@ -682,7 +680,7 @@ def documents_tab(shield: Shield, tier: str, llm_choice: str, reviewer: str) -> 
         if not visible_sentences:
             st.info("No sentences match the current filter criteria.")
         else:
-            for s, f, rev, stat in visible_sentences:
+            for s, f, _rev, stat in visible_sentences:
                 s_id = s.sentence_id
                 score = float(f.get("score", 0.0))
                 signals = f.get("signals", [])
