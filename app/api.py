@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -171,24 +171,38 @@ def create_app(
     )
     api.state.shield = shield
 
+    def route_get(path: str, **kwargs):
+        def dec(fn):
+            api.get(path, **kwargs)(fn)
+            api.get(f"/api{path}", include_in_schema=False, **kwargs)(fn)
+            return fn
+        return dec
+
+    def route_post(path: str, **kwargs):
+        def dec(fn):
+            api.post(path, **kwargs)(fn)
+            api.post(f"/api{path}", include_in_schema=False, **kwargs)(fn)
+            return fn
+        return dec
+
     def _doc(doc_id: str) -> dict[str, Any]:
         doc = shield.ledger.get_document(doc_id)
         if doc is None:
             raise HTTPException(404, f"unknown document {doc_id}")
         return doc
 
-    @api.get("/health")
+    @route_get("/health")
     def health() -> dict[str, Any]:
         return {"status": "ok", "version": __version__,
                 "policy_version": shield.policy["version"], "tier": shield.policy["tier"],
                 "guard": shield.guard.model_id,
                 "real_llm_configured": bool(os.environ.get("RAG_SHIELD_LLM"))}
 
-    @api.get("/samples")
+    @route_get("/samples")
     def list_samples() -> list[dict[str, Any]]:
         return list(SAMPLES.values())
 
-    @api.post("/samples/{sample_name}/ingest")
+    @route_post("/samples/{sample_name}/ingest")
     def ingest_sample(sample_name: str) -> dict[str, Any]:
         if sample_name not in SAMPLES:
             raise HTTPException(404, f"unknown sample fixture {sample_name}")
@@ -198,7 +212,7 @@ def create_app(
         result = shield.ingest(path, source_name=path.name)
         return {**result.to_dict(), "filename": path.name}
 
-    @api.post("/demo-dataset/screen")
+    @route_post("/demo-dataset/screen")
     def screen_demo_dataset() -> dict[str, Any]:
         if not DEMO_DATASET.exists():
             raise HTTPException(404, "demo dataset missing: run python scripts/make_poisoned_dataset.py")
@@ -218,7 +232,7 @@ def create_app(
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    @api.post("/ingest")
+    @route_post("/ingest")
     async def ingest(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
         tmp = Path(tempfile.mkdtemp(prefix=UPLOAD_PREFIX, dir=upload_dir))
         try:
@@ -238,7 +252,7 @@ def create_app(
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    @api.post("/dataset")
+    @route_post("/dataset")
     async def dataset(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
         """Screen an uploaded CSV/JSONL dataset; returns the report and the screened rows.
         Nothing is kept on the server after the request."""
@@ -272,7 +286,7 @@ def create_app(
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    @api.get("/findings/{doc_id}")
+    @route_get("/findings/{doc_id}")
     def findings(doc_id: str) -> dict[str, Any]:
         doc = _doc(doc_id)
         items = [i for i in shield.review_items() if i["doc_id"] == doc_id]
@@ -284,22 +298,22 @@ def create_app(
             "events": shield.ledger.events(doc_id),
         }
 
-    @api.get("/review")
+    @route_get("/review")
     def review() -> dict[str, Any]:
         return {"items": shield.review_items()}
 
-    @api.post("/release/{sentence_id}")
+    @route_post("/release/{sentence_id}")
     def release(sentence_id: str, body: ReleaseRequest) -> dict[str, Any]:
         out = shield.release(sentence_id, body.reviewer)
         if not out["released"]:
             raise HTTPException(409, out.get("reason", "not released"))
         return out
 
-    @api.post("/requarantine/{sentence_id}")
+    @route_post("/requarantine/{sentence_id}")
     def requarantine(sentence_id: str, body: ReleaseRequest) -> dict[str, Any]:
         return shield.requarantine(sentence_id, body.reviewer)
 
-    @api.get("/overlay/{doc_id}/{page}")
+    @route_get("/overlay/{doc_id}/{page}")
     def overlay(doc_id: str, page: int) -> Response:
         _doc(doc_id)
         try:
@@ -308,7 +322,7 @@ def create_app(
             raise HTTPException(400, str(e)) from e
         return Response(content=png, media_type="image/png")
 
-    @api.post("/ask")
+    @route_post("/ask")
     def ask(body: AskRequest) -> dict[str, Any]:
         doc = _doc(body.doc_id)
         if not doc["forensic_path"]:
@@ -327,7 +341,7 @@ def create_app(
             "output_check": check.to_dict(),
         }
 
-    @api.post("/integrity")
+    @route_post("/integrity")
     def integrity(body: IntegrityRequest) -> dict[str, Any]:
         doc = _doc(body.doc_id)
         if not doc["forensic_path"]:
@@ -344,6 +358,8 @@ def create_app(
 
         @api.get("/{full_path:path}", include_in_schema=False)
         def spa_fallback(full_path: str):
+            if full_path.startswith("api/"):
+                raise HTTPException(404, f"API endpoint not found: /{full_path}")
             candidate = FRONTEND_DIST / full_path
             if candidate.is_file():
                 return FileResponse(candidate)
