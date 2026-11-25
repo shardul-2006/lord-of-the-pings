@@ -118,10 +118,28 @@ a { color: var(--accent); text-decoration: none; }
 .hud-corner--bl { bottom: -1px; left: -1px; border-bottom: 2px solid; border-left: 2px solid; }
 .hud-corner--br { bottom: -1px; right: -1px; border-bottom: 2px solid; border-right: 2px solid; }
 
+/* ---- React Bits Scanner Canvas Background ---- */
+.scanner-background-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.72;
+}
+.scanner-background-canvas .scanner-container {
+  width: 100%;
+  height: 100%;
+}
+
 /* ---- Layout ---- */
 .app-root {
   display: flex;
   min-height: 100vh;
+  position: relative;
 }
 .main-area {
   flex: 1;
@@ -130,6 +148,8 @@ a { color: var(--accent); text-decoration: none; }
   transition: margin-left var(--transition-med);
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 1;
 }
 .main-area.sidebar-collapsed { margin-left: 0; }
 
