@@ -76,9 +76,16 @@ Scan limits: `RAG_SHIELD_MAX_BYTES`, `RAG_SHIELD_MAX_PAGES`, `RAG_SHIELD_SCAN_TI
 pip install uvicorn
 uvicorn app.api:create_app --factory --port 8000
 ```
-- **React Web Console**: Open `http://localhost:8000/` for the modern React TypeScript SPA with drag-and-drop ingestion, selectable attack presets, visual evidence inspection, expandable sentence telemetry, arena comparison, review actions, and dataset screening.
+- **React Web Console**: Open `http://localhost:8000/` for the modern React TypeScript SPA designed as a high-tech cybersecurity operations center (SecOps HUD):
+  - **WebGL Reactive Scanner Background**: Integrated React Bits Scanner shader with real-time cursor lensing, repel dynamics, and radar click pings.
+  - **Live Radar & Laser Scanner**: Sequenced pipeline telemetry visualizing magic bytes verification, layout analysis, classifier inference, fusion policy evaluation, and index synchronization.
+  - **Continuous Risk Meter**: Horizontal gradient gauge with visual threshold markers at 0.40 (Review Required) and 0.70 (Quarantine).
+  - **Drag-and-Drop Ingestion**: Client-side drag-and-drop zone with binary magic bytes validation and pre-configured attack library (sub-point white text, carrier metadata, hidden markdown comments, off-canvas coordinates).
+  - **Side-by-Side Arena & Decision Integrity**: Direct comparison of undefended RAG ("INJECTION EXPLOITED") vs defended RAG ("THREAT NEUTRALIZED") with prompt quick-chips and counterfactual decision influence analysis.
+  - **Floating SecOps Toast Alerts**: Real-time notifications for ingest events, review decisions, and integrity reports.
 - **REST API Routes**: `GET /health`, `GET /samples`, `POST /samples/{sample_name}/ingest`, `POST /ingest`, `POST /ask`, `GET /findings/{doc_id}`, `GET /review`, `POST /release/{sentence_id}`, `POST /requarantine/{sentence_id}`, `GET /overlay/{doc_id}/{page}`, `POST /integrity`, `POST /dataset`, `POST /demo-dataset/screen`.
-- **Streamlit Console**: Available concurrently via `streamlit run app/streamlit_app.py` on port 8501.
+  - All routes support dual paths transparently: both direct root paths (e.g., `POST /ingest`) and `/api` prefixed paths (e.g., `POST /api/ingest`).
+- **Streamlit Console**: Available concurrently via `streamlit run app/streamlit_app.py` on port 8501, featuring the live React console embedded in the primary tab alongside native diagnostic tools.
 
 ## Real LLM (optional)
 Tests always use the deterministic `MockLLM`. For a real model the prototype uses local
