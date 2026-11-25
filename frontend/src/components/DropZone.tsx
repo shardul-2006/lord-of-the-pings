@@ -58,6 +58,12 @@ export function DropZone({ onFile, accept, maxSizeMB = 200, disabled }: Props) {
       onDrop={handleDrop}
       onClick={() => !disabled && inputRef.current?.click()}
     >
+      {/* SecOps HUD Brackets in 4 corners */}
+      <span className="hud-corner hud-corner--tl" />
+      <span className="hud-corner hud-corner--tr" />
+      <span className="hud-corner hud-corner--bl" />
+      <span className="hud-corner hud-corner--br" />
+
       <input
         ref={inputRef}
         type="file"
@@ -67,18 +73,25 @@ export function DropZone({ onFile, accept, maxSizeMB = 200, disabled }: Props) {
       />
       {selectedFile ? (
         <div className="dropzone-selected fade-in">
-          <FileIcon size={20} color="#3b82f6" />
+          <div className="file-icon-glow">
+            <FileIcon size={28} color="#3b82f6" />
+          </div>
           <div>
             <div className="dropzone-filename">{selectedFile.name}</div>
-            <div className="dropzone-filesize">{(selectedFile.size / 1024).toFixed(1)} KB</div>
+            <div className="dropzone-filesize">
+              {(selectedFile.size / 1024).toFixed(1)} KB &middot;{' '}
+              <span className="file-chip-badge">{selectedFile.name.split('.').pop()?.toUpperCase()}</span>
+            </div>
           </div>
         </div>
       ) : (
         <div className="dropzone-empty">
-          <UploadIcon size={28} color="#475569" />
-          <div className="dropzone-text">Drop file here or click to browse</div>
+          <div className="upload-icon-pulse">
+            <UploadIcon size={32} color="#3b82f6" />
+          </div>
+          <div className="dropzone-text">Drop document here or click to browse</div>
           <div className="dropzone-hint">
-            {accept ? accept.replace(/\./g, '').toUpperCase() : 'PDF, MD, HTML'} &middot; {maxSizeMB} MB max
+            {accept ? accept.replace(/\./g, '').toUpperCase() : 'PDF, MD, HTML'} &middot; {maxSizeMB} MB max &middot; Fail-Closed Guard
           </div>
         </div>
       )}

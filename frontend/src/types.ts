@@ -59,6 +59,18 @@ export interface DatasetSummary {
   reason?: string
 }
 
+export interface IntegrityResult {
+  possible_decision_influence: boolean
+  delta: number
+  reason: string
+  threshold: number
+  status: string
+  variance?: {
+    runs_per_condition?: number
+    [key: string]: unknown
+  }
+}
+
 export interface DatasetResult {
   summary: DatasetSummary
   report: {

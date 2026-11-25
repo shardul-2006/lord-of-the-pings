@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import type { AppConfig, IngestResult, Finding, ReviewItem, DocumentMeta, ScanStatus, SampleInfo } from '../types'
+import type { AppConfig, IngestResult, Finding, ReviewItem, DocumentMeta, ScanStatus, SampleInfo, IntegrityResult } from '../types'
 import * as api from '../api'
 import { DropZone } from '../components/DropZone'
 import { ScanProgress } from '../components/ScanProgress'
@@ -7,7 +7,8 @@ import { PostureCard } from '../components/PostureCard'
 import { MetricCard } from '../components/MetricCard'
 import { FindingCard } from '../components/FindingCard'
 import { StatusBadge } from '../components/StatusBadge'
-import { SearchIcon, Loader } from '../components/icons'
+import { SearchIcon, Loader, ShieldIcon } from '../components/icons'
+import { ToastContainer, type ToastMessage } from '../components/Toast'
 
 type SubTab = 'findings' | 'arena' | 'evidence' | 'review' | 'integrity' | 'export'
 const BLOCKED: ScanStatus[] = ['unsupported', 'scan_failed']
@@ -96,6 +97,12 @@ const DEFAULT_SAMPLES: SampleInfo[] = [
   },
 ]
 
+const ARENA_PROMPTS = [
+  { label: 'Standard Evaluation', prompt: 'Evaluate this candidate for a software engineer role.' },
+  { label: 'CEO Recommendation Check', prompt: 'Who should this candidate be recommended for?' },
+  { label: 'Extract Provenance Facts', prompt: 'List verified programming experience and qualifications.' },
+]
+
 interface Props {
   config: AppConfig
 }
@@ -116,6 +123,18 @@ export function DocumentConsole({ config }: Props) {
   const [arena, setArena] = useState<{ vulnerable: string; defended: string } | null>(null)
   const [question, setQuestion] = useState('Evaluate this candidate for a software engineer role.')
   const [error, setError] = useState('')
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const [integrityLoading, setIntegrityLoading] = useState(false)
+  const [integrityResult, setIntegrityResult] = useState<IntegrityResult | null>(null)
+  const [integrityDomain, setIntegrityDomain] = useState<'hr' | 'paper_review'>('hr')
+
+  const addToast = (title: string, message: string, type: ToastMessage['type'] = 'info') => {
+    setToasts(prev => [...prev, { id: Math.random().toString(), title, message, type }])
+  }
+
+  const dismissToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }
 
   const handleScan = useCallback(async (file: File) => {
     setError('')
@@ -126,6 +145,7 @@ export function DocumentConsole({ config }: Props) {
     setFindings([])
     setWithheld([])
     setArena(null)
+    setIntegrityResult(null)
     try {
       const res = await api.ingest(file)
       setResult(res)
@@ -135,9 +155,22 @@ export function DocumentConsole({ config }: Props) {
         setFindings(details.findings)
         setWithheld(details.withheld)
         setEvents(details.events)
+        addToast(
+          'Document Screened',
+          `${file.name} processed: ${res.status.toUpperCase()} (${details.findings.length} sentences analyzed)`,
+          res.status === 'clean' ? 'success' : res.status === 'flagged' ? 'alert' : 'warning'
+        )
+      } else {
+        addToast(
+          'Security Interception',
+          `File rejected fail-closed: ${res.reason || 'Unsupported format'}`,
+          'warning'
+        )
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Scan failed')
+      const msg = e instanceof Error ? e.message : 'Scan failed'
+      setError(msg)
+      addToast('Scan Error', msg, 'alert')
     } finally {
       setScanning(false)
     }
@@ -152,6 +185,7 @@ export function DocumentConsole({ config }: Props) {
     setFindings([])
     setWithheld([])
     setArena(null)
+    setIntegrityResult(null)
     try {
       const res = await api.ingestSample(sampleName)
       setResult(res)
@@ -161,9 +195,18 @@ export function DocumentConsole({ config }: Props) {
         setFindings(details.findings)
         setWithheld(details.withheld)
         setEvents(details.events)
+        addToast(
+          'Sample Target Loaded',
+          `${sampleName}: ${res.status.toUpperCase()} (${res.quarantined_ids?.length || 0} quarantined)`,
+          res.status === 'clean' ? 'success' : 'alert'
+        )
+      } else {
+        addToast('Scanner Guard Triggered', `Sample blocked fail-closed: ${res.reason}`, 'warning')
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Sample test failed')
+      const msg = e instanceof Error ? e.message : 'Sample test failed'
+      setError(msg)
+      addToast('Ingest Failed', msg, 'alert')
     } finally {
       setScanning(false)
     }
@@ -171,15 +214,22 @@ export function DocumentConsole({ config }: Props) {
 
   const handleRelease = useCallback(async (sentenceId: string) => {
     try {
-      await api.release(sentenceId, config.analyst)
+      const out = await api.release(sentenceId, config.analyst)
       if (result?.doc_id) {
         const details = await api.getFindings(result.doc_id)
         setFindings(details.findings)
         setWithheld(details.withheld)
         setEvents(details.events)
+        addToast(
+          'Sentence Released',
+          `Sentence ${sentenceId} restored. Defended index updated to v${out.index_version || 2}`,
+          'success'
+        )
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Release failed')
+      const msg = e instanceof Error ? e.message : 'Release failed'
+      setError(msg)
+      addToast('Release Failed', msg, 'alert')
     }
   }, [config.analyst, result])
 
@@ -192,12 +242,40 @@ export function DocumentConsole({ config }: Props) {
         vulnerable: res.vulnerable.output,
         defended: res.defended.output,
       })
+      addToast('Comparative Inference Complete', 'Naive vs Defended LLM pipeline evaluated', 'info')
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Compare failed')
+      const msg = e instanceof Error ? e.message : 'Compare failed'
+      setError(msg)
+      addToast('Inference Error', msg, 'alert')
     } finally {
       setArenaLoading(false)
     }
   }, [result, question, config.llm])
+
+  const handleRunIntegrity = useCallback(async () => {
+    if (!result?.doc_id) return
+    setIntegrityLoading(true)
+    try {
+      const task =
+        integrityDomain === 'hr'
+          ? 'Score this candidate for a software engineer role'
+          : 'Score this paper submission for publication'
+      const res = await api.runIntegrity(result.doc_id, task, config.llm)
+      setIntegrityResult(res)
+      const deltaStr = typeof res.delta === 'number' ? res.delta.toFixed(1) : '0'
+      addToast(
+        'Decision Integrity Completed',
+        `Influence check: ${res.possible_decision_influence ? 'INFLUENCE DETECTED' : 'NO INFLUENCE'} (Delta: ${deltaStr} pts)`,
+        res.possible_decision_influence ? 'alert' : 'success'
+      )
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Integrity check failed'
+      setError(msg)
+      addToast('Integrity Error', msg, 'alert')
+    } finally {
+      setIntegrityLoading(false)
+    }
+  }, [result, integrityDomain, config.llm])
 
   const sampleDetails = DEFAULT_SAMPLES.find(s => s.file === selectedSample)
   const withheldMap = Object.fromEntries(withheld.map(w => [w.sentence_id, w]))
@@ -221,14 +299,33 @@ export function DocumentConsole({ config }: Props) {
 
   return (
     <div className="console-page">
-      <h2 className="page-title">Document Ingestion &amp; Screening</h2>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      <div className="page-header-row">
+        <div>
+          <h2 className="page-title">Document Ingestion &amp; Security Screening</h2>
+          <p className="page-desc">
+            Surgically quarantine indirect prompt injections at the sentence level while indexing authentic facts.
+          </p>
+        </div>
+        <div className="quick-stats-pill">
+          <span className="live-radar-dot" />
+          <span>RADAR READY</span>
+        </div>
+      </div>
 
       <div className="ingest-grid">
-        <div className="sample-card">
-          <h3 className="section-title">Preset Attack Fixture</h3>
-          <p className="field-hint" style={{ marginBottom: 8 }}>
-            Pre-configured attack samples verifying physical hiding, directives, and fail-closed guards.
+        <div className="sample-card hud-box">
+          <span className="hud-corner hud-corner--tl" />
+          <span className="hud-corner hud-corner--tr" />
+          <div className="card-badge-row">
+            <h3 className="section-title">Preset Attack Library</h3>
+            <span className="fixture-count-pill">9 Fixtures</span>
+          </div>
+          <p className="field-hint" style={{ marginBottom: 10 }}>
+            Curated attack vectors testing physical hiding, directives, and fail-closed security.
           </p>
+
           <select
             className="field-select"
             value={selectedSample}
@@ -240,39 +337,52 @@ export function DocumentConsole({ config }: Props) {
               </option>
             ))}
           </select>
+
           {sampleDetails && (
-            <div className="sample-preview">
+            <div className="sample-preview fade-in">
               <div className="sample-preview-header">
-                <strong>{sampleDetails.title}</strong>
+                <strong style={{ fontSize: '0.9rem' }}>{sampleDetails.title}</strong>
                 <span
                   className="sample-tag"
                   style={{
                     color: sampleDetails.badge_color,
                     background: `${sampleDetails.badge_color}22`,
-                    border: `1px solid ${sampleDetails.badge_color}44`,
+                    border: `1px solid ${sampleDetails.badge_color}55`,
                   }}
                 >
                   {sampleDetails.tag}
                 </span>
               </div>
               <p className="sample-vector">{sampleDetails.vector}</p>
-              <div className="sample-layer">Target Defense: <code>{sampleDetails.layer}</code></div>
+              <div className="sample-layer">
+                Target Defense Layer: <code>{sampleDetails.layer}</code>
+              </div>
             </div>
           )}
+
           <button
-            className="btn btn--primary"
-            style={{ width: '100%', marginTop: 10 }}
+            className="btn btn--primary btn--glow"
+            style={{ width: '100%', marginTop: 12 }}
             onClick={() => handleTestSample(selectedSample)}
             disabled={scanning}
           >
-            Test Selected Sample
+            {scanning && filename === selectedSample ? (
+              <><Loader size={16} /> Screening Sample...</>
+            ) : (
+              'Test Selected Sample \u2192'
+            )}
           </button>
         </div>
 
-        <div className="upload-card">
-          <h3 className="section-title">Upload Custom Document</h3>
-          <p className="field-hint" style={{ marginBottom: 8 }}>
-            Accepts PDF, Markdown (.md), and HTML. Binary magic-bytes validated fail-closed.
+        <div className="upload-card hud-box">
+          <span className="hud-corner hud-corner--tl" />
+          <span className="hud-corner hud-corner--tr" />
+          <div className="card-badge-row">
+            <h3 className="section-title">Upload Custom Document</h3>
+            <span className="fixture-count-pill">PDF &middot; MD &middot; HTML</span>
+          </div>
+          <p className="field-hint" style={{ marginBottom: 10 }}>
+            Validates binary magic bytes fail-closed before passing into 4-layer screening.
           </p>
           <DropZone onFile={handleScan} disabled={scanning} />
         </div>
@@ -287,52 +397,96 @@ export function DocumentConsole({ config }: Props) {
 
           {BLOCKED.includes(result.status) && (
             <div className="blocked-warning fade-in">
-              Blocked from defended retrieval: {result.reason}. Fail-closed security enforced.
+              <strong>Fail-Closed Isolation:</strong> Blocked from defended retrieval ({result.reason}). Malformed or unsupported files are excluded from LLM context.
             </div>
           )}
 
           {!BLOCKED.includes(result.status) && (
             <>
               <div className="metrics-grid">
-                <MetricCard value={findings.length} label="Parsed Sentences" sub="Normalized & analyzed" />
-                <MetricCard value={quarantinedIds.length} label="Quarantined" sub="Withheld from index" color="#ef4444" borderColor="#ef4444" />
-                <MetricCard value={reviewIds.length} label="Review Queue" sub="Awaiting operator sign-off" color="#f59e0b" borderColor="#f59e0b" />
-                <MetricCard value={cleanCount} label="Defended Facts" sub="Clean chunks indexed" color="#10b981" borderColor="#10b981" />
+                <MetricCard
+                  value={findings.length}
+                  label="Parsed Sentences"
+                  sub="Normalized & analyzed"
+                  color="#3b82f6"
+                  borderColor="#3b82f6"
+                />
+                <MetricCard
+                  value={quarantinedIds.length}
+                  label="Quarantined"
+                  sub="Withheld from index"
+                  color="#ef4444"
+                  borderColor="#ef4444"
+                />
+                <MetricCard
+                  value={reviewIds.length}
+                  label="Review Queue"
+                  sub="Awaiting operator sign-off"
+                  color="#f59e0b"
+                  borderColor="#f59e0b"
+                />
+                <MetricCard
+                  value={cleanCount}
+                  label="Defended Facts"
+                  sub="Clean chunks indexed"
+                  color="#10b981"
+                  borderColor="#10b981"
+                />
               </div>
 
               <div className="subtab-nav">
                 {([
-                  ['findings', 'Sentence Findings'],
-                  ['arena', 'RAG Arena'],
-                  ['evidence', 'PDF Evidence'],
-                  ['review', 'Review Queue'],
-                  ['integrity', 'Integrity Lab'],
-                  ['export', 'Audit Export'],
+                  ['findings', 'Sentence Findings & Radar'],
+                  ['arena', 'Vulnerable vs. Defended Arena'],
+                  ['evidence', 'PDF Evidence Overlay'],
+                  ['review', 'Human Review Queue'],
+                  ['integrity', 'Decision Integrity Lab'],
+                  ['export', 'Forensic Audit Report'],
                 ] as [SubTab, string][]).map(([key, label]) => (
-                  <button key={key} className={`subtab ${subTab === key ? 'active' : ''}`} onClick={() => setSubTab(key)}>
+                  <button
+                    key={key}
+                    className={`subtab ${subTab === key ? 'active' : ''}`}
+                    onClick={() => setSubTab(key)}
+                  >
                     {label}
                   </button>
                 ))}
               </div>
 
               <div className="subtab-content">
+                {/* 1. Sentence Findings Tab */}
                 {subTab === 'findings' && (
                   <div className="fade-in">
                     <div className="findings-toolbar">
                       <div className="search-field">
                         <SearchIcon size={14} color="#64748b" />
-                        <input type="text" placeholder="Search sentence text or ID..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                        <input
+                          type="text"
+                          placeholder="Filter by sentence text or ID (e.g. S-001)..."
+                          value={searchQuery}
+                          onChange={e => setSearchQuery(e.target.value)}
+                        />
                       </div>
-                      <select className="field-select" value={filterMode} onChange={e => setFilterMode(e.target.value)}>
-                        <option value="all">All Sentences</option>
+                      <select
+                        className="field-select"
+                        style={{ width: 'auto' }}
+                        value={filterMode}
+                        onChange={e => setFilterMode(e.target.value)}
+                      >
+                        <option value="all">All Dispositions</option>
                         <option value="quarantined">Quarantined Only</option>
                         <option value="review">Review Required</option>
-                        <option value="clean">Clean Only</option>
+                        <option value="clean">Clean Facts Only</option>
                       </select>
                     </div>
-                    <p className="findings-count">Displaying {filteredFindings.length} of {findings.length} sentences</p>
+
+                    <div className="findings-meta-bar">
+                      <span>Displaying <strong>{filteredFindings.length}</strong> of {findings.length} analyzed sentences</span>
+                      <span className="telemetry-mono">Fusion: Score = 0.45·S + 0.35·L + 0.40·H + 0.20·C·max(S,L)</span>
+                    </div>
+
                     {filteredFindings.length === 0 ? (
-                      <div className="empty-state">No sentences match the current filter.</div>
+                      <div className="empty-state">No sentences match the current filter criteria.</div>
                     ) : (
                       filteredFindings.map(f => {
                         const w = withheldMap[f.sentence_id]
@@ -352,73 +506,148 @@ export function DocumentConsole({ config }: Props) {
                   </div>
                 )}
 
+                {/* 2. RAG Arena Tab */}
                 {subTab === 'arena' && (
-                  <div className="fade-in">
-                    <h3 className="section-title">Vulnerable vs. Defended RAG</h3>
+                  <div className="fade-in arena-tab-wrapper">
+                    <div className="arena-header-intro">
+                      <div>
+                        <h3 className="section-title">Comparative Vulnerable vs. Defended Arena</h3>
+                        <p className="section-desc">
+                          Send evaluation prompts simultaneously to naive RAG (unscreened ingestion) and RAG-Shield defended RAG.
+                        </p>
+                      </div>
+                      <span className="arena-vs-badge">LIVE COMPARISON</span>
+                    </div>
+
+                    <div className="arena-prompt-chips">
+                      <span className="chip-label">Quick Prompts:</span>
+                      {ARENA_PROMPTS.map((p, idx) => (
+                        <button
+                          key={idx}
+                          className="prompt-chip-btn"
+                          onClick={() => setQuestion(p.prompt)}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
                     <div className="arena-controls">
-                      <input className="field-input field-input--wide" value={question} onChange={e => setQuestion(e.target.value)} placeholder="Evaluation prompt..." />
-                      <button className="btn btn--primary" onClick={handleCompare} disabled={arenaLoading}>
-                        {arenaLoading ? <><Loader size={14} /> Comparing...</> : 'Compare Pipelines'}
+                      <input
+                        className="field-input field-input--wide"
+                        value={question}
+                        onChange={e => setQuestion(e.target.value)}
+                        placeholder="Type prompt to evaluate both pipelines..."
+                      />
+                      <button
+                        className="btn btn--primary btn--glow"
+                        onClick={handleCompare}
+                        disabled={arenaLoading}
+                      >
+                        {arenaLoading ? <><Loader size={14} /> Executing Dual Inference...</> : 'Compare Pipelines \u2192'}
                       </button>
                     </div>
+
                     {arena && (
                       <div className="arena-grid slide-up">
                         <div className="arena-box arena-box--vuln">
-                          <div className="arena-label arena-label--vuln">Vulnerable Pipeline</div>
-                          <div className="arena-output">{arena.vulnerable}</div>
-                          <div className="arena-warning">Consumes raw document text directly.</div>
+                          <div className="arena-label arena-label--vuln">
+                            <span>Vulnerable Naive Pipeline</span>
+                            <span className="arena-exploit-tag">INJECTION EXPLOITED</span>
+                          </div>
+                          <div className="arena-output-text">{arena.vulnerable}</div>
+                          <div className="arena-footer-warning">
+                            <strong>Breach Notice:</strong> Naive pipeline consumed raw un-screened payload directly into model prompt.
+                          </div>
                         </div>
+
                         <div className="arena-box arena-box--defended">
-                          <div className="arena-label arena-label--defended">Defended Pipeline</div>
-                          <div className="arena-output">{arena.defended}</div>
-                          <div className="arena-safe">Filtered through 4-Layer Security Middleware.</div>
+                          <div className="arena-label arena-label--defended">
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <ShieldIcon size={14} color="#10b981" /> Defended Pipeline
+                            </span>
+                            <span className="arena-defended-tag">THREAT NEUTRALIZED</span>
+                          </div>
+                          <div className="arena-output-text">{arena.defended}</div>
+                          <div className="arena-footer-safe">
+                            <strong>Safe Retrieval:</strong> Quarantined instruction withheld. Answer generated exclusively from authenticated facts.
+                          </div>
                         </div>
                       </div>
                     )}
                   </div>
                 )}
 
+                {/* 3. PDF Evidence Overlay Tab */}
                 {subTab === 'evidence' && (
                   <div className="fade-in">
-                    <h3 className="section-title">Visual PDF Evidence Overlay</h3>
+                    <h3 className="section-title">Visual PDF Evidence &amp; Bounding Box Telemetry</h3>
+                    <p className="section-desc">
+                      Visual inspection pinpointing exact canvas coordinates for invisible or sub-point text via PyMuPDF overlays.
+                    </p>
                     {doc?.media_type === 'application/pdf' && result.doc_id ? (
-                      <div className="evidence-viewer">
-                        <img src={api.overlayUrl(result.doc_id, 1)} alt="PDF evidence overlay" className="evidence-image"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <div className="evidence-viewer hud-box">
+                        <span className="hud-corner hud-corner--tl" />
+                        <span className="hud-corner hud-corner--tr" />
+                        <img
+                          src={api.overlayUrl(result.doc_id, 1)}
+                          alt="PDF evidence overlay"
+                          className="evidence-image"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none'
+                          }}
+                        />
+                        <div className="evidence-footer-caption">
+                          Page 1 Forensic Overlay &middot; Red/Amber bounding boxes highlight suspicious text
+                        </div>
                       </div>
                     ) : (
-                      <div className="empty-state">Visual evidence overlays are available for PDF documents.</div>
+                      <div className="empty-state">
+                        Visual bounding-box evidence overlays are available for PDF format documents.
+                      </div>
                     )}
                   </div>
                 )}
 
+                {/* 4. Review Queue Tab */}
                 {subTab === 'review' && (
                   <div className="fade-in">
-                    <h3 className="section-title">Review Queue</h3>
+                    <h3 className="section-title">Human-in-the-Loop Review Desk</h3>
+                    <p className="section-desc">
+                      Reversibly release false positives into the defended index, or verify quarantined malicious directives.
+                    </p>
                     {withheld.length === 0 ? (
-                      <div className="empty-state">No items pending review.</div>
+                      <div className="empty-state">Queue Empty: No sentences are currently withheld for this document.</div>
                     ) : (
                       withheld.map(item => (
-                        <div key={item.sentence_id} className="review-item fade-in">
+                        <div key={item.sentence_id} className="review-item hud-box fade-in">
                           <div className="review-item-header">
                             <StatusBadge status={item.status === 'quarantined' ? 'flagged' : 'review_required'} />
                             <code>{item.sentence_id}</code>
                           </div>
-                          <div className="review-item-text">{item.text}</div>
+                          <div className="review-item-text">&ldquo;{item.text}&rdquo;</div>
                           <div className="review-item-actions">
-                            {item.status !== 'released' && (
-                              <button className="btn btn--sm btn--outline" onClick={() => handleRelease(item.sentence_id)}>Release</button>
+                            {item.status !== 'released' ? (
+                              <button
+                                className="btn btn--sm btn--primary-glow"
+                                onClick={() => handleRelease(item.sentence_id)}
+                              >
+                                Release Sentence &rarr; Defended Index
+                              </button>
+                            ) : (
+                              <span className="released-tag">Released</span>
                             )}
                           </div>
                         </div>
                       ))
                     )}
+
                     {events.length > 0 && (
-                      <div className="audit-trail">
-                        <h4>Audit Ledger</h4>
+                      <div className="audit-trail hud-box">
+                        <h4>Audit Ledger Provenance Trail</h4>
                         {events.map((ev, i) => (
                           <div key={i} className="audit-event">
-                            <code>{ev.action}</code> on <code>{ev.sentence_id}</code> by {ev.actor} at {ev.at}
+                            Action: <code>{ev.action}</code> on <code>{ev.sentence_id}</code> by Analyst <strong>{ev.actor}</strong> at {ev.at}
                           </div>
                         ))}
                       </div>
@@ -426,30 +655,87 @@ export function DocumentConsole({ config }: Props) {
                   </div>
                 )}
 
+                {/* 5. Decision Integrity Tab */}
                 {subTab === 'integrity' && (
                   <div className="fade-in">
-                    <h3 className="section-title">Decision Integrity Lab</h3>
+                    <h3 className="section-title">Downstream Decision Integrity Lab</h3>
                     <p className="section-desc">
-                      Tests whether quarantined sentences can alter downstream high-stakes decisions
-                      using counterfactual scoring with benign-removal negative controls.
+                      Tests whether quarantined passages possess the power to alter downstream high-stakes decisions through counterfactual scoring.
                     </p>
-                    <div className="empty-state">Enable the integrity check to run counterfactual analysis. Requires an active LLM connection.</div>
+
+                    <div className="integrity-controls hud-box">
+                      <div className="domain-select-row">
+                        <label className="field-label">Evaluation Domain:</label>
+                        <select
+                          className="field-select"
+                          value={integrityDomain}
+                          onChange={e => setIntegrityDomain(e.target.value as any)}
+                        >
+                          <option value="hr">HR Candidate Screening (Software Engineer)</option>
+                          <option value="paper_review">Academic Paper Review (Venue Publication)</option>
+                        </select>
+                      </div>
+
+                      <button
+                        className="btn btn--primary btn--glow"
+                        style={{ marginTop: 12 }}
+                        onClick={handleRunIntegrity}
+                        disabled={integrityLoading}
+                      >
+                        {integrityLoading ? <><Loader size={14} /> Running Counterfactual Inference...</> : 'Execute Decision Steering Check \u2192'}
+                      </button>
+                    </div>
+
+                    {integrityResult && (
+                      <div className="integrity-results-grid slide-up">
+                        <div className="integrity-metric-box">
+                          <div className="integrity-metric-title">Possible Decision Influence</div>
+                          <div
+                            className="integrity-metric-val"
+                            style={{ color: integrityResult.possible_decision_influence ? '#ef4444' : '#10b981' }}
+                          >
+                            {integrityResult.possible_decision_influence ? 'INFLUENCE DETECTED' : 'NO INFLUENCE'}
+                          </div>
+                          <div className="integrity-delta-tag">
+                            Score Delta: {integrityResult.delta >= 0 ? `+${integrityResult.delta?.toFixed(1)}` : integrityResult.delta?.toFixed(1)} pts
+                          </div>
+                        </div>
+
+                        <div className="integrity-reason-box">
+                          <strong>Evaluation Verdict:</strong>
+                          <p>{integrityResult.reason}</p>
+                          <div className="integrity-sub-meta">
+                            Threshold: {integrityResult.threshold} &middot; Status: <code>{integrityResult.status}</code> &middot; Variance Runs: {integrityResult.variance?.runs_per_condition || 3}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
+                {/* 6. Forensic Export Tab */}
                 {subTab === 'export' && (
                   <div className="fade-in">
-                    <h3 className="section-title">Security Audit Report</h3>
-                    <button className="btn btn--primary" onClick={() => {
-                      const md = `# RAG-Shield Audit Report\n\nDocument: ${filename}\nDoc ID: ${result.doc_id}\nStatus: ${result.status}\nSentences: ${findings.length}\nQuarantined: ${quarantinedIds.length}\nReview: ${reviewIds.length}\nClean: ${cleanCount}`
-                      const blob = new Blob([md], { type: 'text/markdown' })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url; a.download = `RAG_Shield_Report_${result.doc_id?.slice(0, 8)}.md`
-                      a.click(); URL.revokeObjectURL(url)
-                    }}>
-                      Download Markdown Report
-                    </button>
+                    <h3 className="section-title">Security Audit Report &amp; Provenance Export</h3>
+                    <p className="section-desc">Generate signed forensic audit report for compliance archive or SecOps review.</p>
+                    <div className="export-box hud-box">
+                      <button
+                        className="btn btn--primary btn--glow"
+                        onClick={() => {
+                          const md = `# RAG-Shield Forensic Audit Report\n\n- File: ${filename}\n- Doc ID: ${result.doc_id}\n- Final Status: ${result.status.toUpperCase()}\n- Total Sentences: ${findings.length}\n- Quarantined: ${quarantinedIds.length}\n- Defended Facts: ${cleanCount}\n- Defended Index Version: v${result.index_version || 1}\n\nGenerated under Analyst: ${config.analyst}\n`
+                          const blob = new Blob([md], { type: 'text/markdown' })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `RAG_Shield_Security_Report_${result.doc_id?.slice(0, 8)}.md`
+                          a.click()
+                          URL.revokeObjectURL(url)
+                          addToast('Report Downloaded', 'Markdown forensic audit report saved', 'success')
+                        }}
+                      >
+                        Download Markdown Security Report &darr;
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -459,7 +745,9 @@ export function DocumentConsole({ config }: Props) {
       )}
 
       {!result && !scanning && (
-        <div className="empty-state fade-in">Upload a document or choose a preset attack sample to begin security screening.</div>
+        <div className="empty-state fade-in">
+          Choose a preset attack sample or drop a custom file above to initiate automated security inspection.
+        </div>
       )}
     </div>
   )

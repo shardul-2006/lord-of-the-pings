@@ -74,7 +74,7 @@ export function overlayUrl(docId: string, page: number) {
 }
 
 export async function runIntegrity(docId: string, task: string, llm: string) {
-  return request<Record<string, unknown>>('/integrity', {
+  return request<import('./types').IntegrityResult>('/integrity', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ doc_id: docId, task, llm }),

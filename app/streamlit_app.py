@@ -1102,7 +1102,7 @@ def dataset_tab(shield: Shield) -> None:
     with c_demo:
         st.markdown("##### Pre-Configured Poisoned Demo Dataset")
         st.caption("1,000 synthetic rows with planted backdoor triggers and poisoned text.")
-        if st.button("Test 1,000-Row Planted Demo", key="demo_dataset_btn", use_container_width=True):
+        if st.button("Test 1,000-Row Planted Demo", key="demo_dataset", use_container_width=True):
             if DEMO_DATASET.exists():
                 with st.spinner("Screening 1,000 synthetic rows for backdoor triggers..."):
                     st.session_state.dataset = screen_dataset_bytes(
@@ -1124,33 +1124,11 @@ def dataset_tab(shield: Shield) -> None:
         return
 
     st.markdown("---")
-    st.markdown(
-        f"""
-        <div class="rs-hud-grid">
-            <div class="rs-hud-box">
-                <div class="rs-hud-val">{s['total']}</div>
-                <div class="rs-hud-lbl">Total Rows</div>
-                <div class="rs-hud-sub">Parsed & analyzed</div>
-            </div>
-            <div class="rs-hud-box" style="border-bottom:2px solid #ef4444;">
-                <div class="rs-hud-val" style="color:#ef4444;">{s['quarantined']}</div>
-                <div class="rs-hud-lbl">Poisoned Rows</div>
-                <div class="rs-hud-sub">Backdoor triggers isolated</div>
-            </div>
-            <div class="rs-hud-box" style="border-bottom:2px solid #f59e0b;">
-                <div class="rs-hud-val" style="color:#f59e0b;">{s['duplicates']}</div>
-                <div class="rs-hud-lbl">Exact Duplicates</div>
-                <div class="rs-hud-sub">Deduplicated</div>
-            </div>
-            <div class="rs-hud-box" style="border-bottom:2px solid #8b5cf6;">
-                <div class="rs-hud-val" style="color:#8b5cf6;">{s['near_duplicates']}</div>
-                <div class="rs-hud-lbl">Near Duplicates</div>
-                <div class="rs-hud-sub">High lexical similarity</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Rows", str(s["total"]))
+    m2.metric("Poisoned", str(s["quarantined"]))
+    m3.metric("Exact Duplicates", str(s["duplicates"]))
+    m4.metric("Near Duplicates", str(s["near_duplicates"]))
 
     col_tok, col_flag = st.columns([1, 1.4], gap="medium")
     with col_tok:

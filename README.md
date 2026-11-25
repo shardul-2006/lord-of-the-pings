@@ -77,7 +77,7 @@ pip install uvicorn
 uvicorn app.api:create_app --factory --port 8000
 ```
 - **React Web Console**: Open `http://localhost:8000/` for the modern React TypeScript SPA with drag-and-drop ingestion, selectable attack presets, visual evidence inspection, expandable sentence telemetry, arena comparison, review actions, and dataset screening.
-- **REST API Routes**: `GET /health`, `GET /samples`, `POST /samples/{sample}/ingest`, `POST /ingest`, `POST /ask`, `GET /findings/{doc_id}`, `GET /review`, `POST /release/{sentence_id}`, `POST /requarantine/{sentence_id}`, `GET /overlay/{doc_id}/{page}`, `POST /integrity`, `POST /dataset`, `POST /demo-dataset/screen`.
+- **REST API Routes**: `GET /health`, `GET /samples`, `POST /samples/{sample_name}/ingest`, `POST /ingest`, `POST /ask`, `GET /findings/{doc_id}`, `GET /review`, `POST /release/{sentence_id}`, `POST /requarantine/{sentence_id}`, `GET /overlay/{doc_id}/{page}`, `POST /integrity`, `POST /dataset`, `POST /demo-dataset/screen`.
 - **Streamlit Console**: Available concurrently via `streamlit run app/streamlit_app.py` on port 8501.
 
 ## Real LLM (optional)

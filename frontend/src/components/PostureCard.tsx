@@ -31,18 +31,27 @@ export function PostureCard({ result, filename }: Props) {
     : status === 'review_required' ? 'posture--review'
     : 'posture--clean'
 
+  const accentColor = isBlocked ? '#64748b'
+    : status === 'flagged' ? '#ef4444'
+    : status === 'review_required' ? '#f59e0b'
+    : '#10b981'
+
   return (
     <div className={`posture-card ${themeClass} slide-up`}>
-      <Icon size={22} />
+      <div className="posture-icon-wrapper" style={{ borderColor: `${accentColor}55` }}>
+        <Icon size={24} color={accentColor} />
+        <span className="posture-ping-ring" style={{ borderColor: accentColor }} />
+      </div>
       <div className="posture-body">
         <div className="posture-headline">
           <strong>{headline}</strong>
           <StatusBadge status={status} size="md" />
         </div>
         <div className="posture-meta">
-          Document: <strong>{filename}</strong> &middot;
-          Doc ID: <code>{doc_id?.slice(0, 12)}...</code> &middot;
-          Index Version: <code>v{index_version || 1}</code>
+          <span className="posture-chip">Target: <strong>{filename}</strong></span>
+          <span className="posture-chip">Doc ID: <code>{doc_id?.slice(0, 12)}...</code></span>
+          <span className="posture-chip">Index: <code>v{index_version || 1}</code></span>
+          <span className="posture-chip">Disposition: <strong>{status.toUpperCase()}</strong></span>
         </div>
       </div>
     </div>
