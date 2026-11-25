@@ -1,7 +1,6 @@
-import type { AppConfig } from '../types'
-import { ShieldIcon, LockIcon, UnlockIcon } from './icons'
+import type { AppConfig, ScanStatus } from '../types'
+import { ShieldIcon, LockIcon, UnlockIcon, SettingsIcon, TagIcon, TerminalIcon } from './icons'
 import { StatusBadge } from './StatusBadge'
-import type { ScanStatus } from '../types'
 
 interface Props {
   open: boolean
@@ -35,18 +34,42 @@ export function Sidebar({ open, config, onConfigChange, onToggle }: Props) {
           </div>
         </div>
 
-        <div className="sidebar-section">
-          <h3 className="sidebar-heading">Configuration &amp; Policy</h3>
+        <div className="sidebar-panel-card">
+          <div className="sidebar-heading-row">
+            <SettingsIcon size={13} color="#60a5fa" />
+            <h3 className="sidebar-heading">Configuration &amp; Policy</h3>
+          </div>
 
           <label className="field-label">Source Trust Tier</label>
-          <select
-            className="field-select"
-            value={config.tier}
-            onChange={(e) => onConfigChange({ ...config, tier: e.target.value as AppConfig['tier'] })}
-          >
-            <option value="external_upload">external_upload (Strict)</option>
-            <option value="internal_kb">internal_kb (Relaxed)</option>
-          </select>
+          <div className="option-pill-group" role="radiogroup" aria-label="Source Trust Tier">
+            <button
+              type="button"
+              className={`option-card-btn ${config.tier === 'external_upload' ? 'active active--amber' : ''}`}
+              onClick={() => onConfigChange({ ...config, tier: 'external_upload' })}
+            >
+              <div className="option-card-top">
+                <span className="option-card-title">
+                  <LockIcon size={12} /> External
+                </span>
+                <span className="option-card-code">STRICT</span>
+              </div>
+              <span className="option-card-sub">0.70 / 0.40 &middot; Nonce</span>
+            </button>
+            <button
+              type="button"
+              className={`option-card-btn ${config.tier === 'internal_kb' ? 'active active--green' : ''}`}
+              onClick={() => onConfigChange({ ...config, tier: 'internal_kb' })}
+            >
+              <div className="option-card-top">
+                <span className="option-card-title">
+                  <UnlockIcon size={12} /> Internal KB
+                </span>
+                <span className="option-card-code">RELAXED</span>
+              </div>
+              <span className="option-card-sub">0.90 / 0.80 &middot; Wiki</span>
+            </button>
+          </div>
+
           <div className="tier-spec-card">
             {config.tier === 'external_upload' ? (
               <>
@@ -72,14 +95,30 @@ export function Sidebar({ open, config, onConfigChange, onToggle }: Props) {
           </div>
 
           <label className="field-label">Language Model Engine</label>
-          <select
-            className="field-select"
-            value={config.llm}
-            onChange={(e) => onConfigChange({ ...config, llm: e.target.value as AppConfig['llm'] })}
-          >
-            <option value="mock">mock (Deterministic Security Double)</option>
-            <option value="real">real (Ollama / Local Llama 3.1 8B)</option>
-          </select>
+          <div className="option-pill-group" role="radiogroup" aria-label="Language Model Engine">
+            <button
+              type="button"
+              className={`option-card-btn ${config.llm === 'mock' ? 'active active--blue' : ''}`}
+              onClick={() => onConfigChange({ ...config, llm: 'mock' })}
+            >
+              <div className="option-card-top">
+                <span className="option-card-title">Mock Double</span>
+                <span className="option-card-code">FAST</span>
+              </div>
+              <span className="option-card-sub">Deterministic</span>
+            </button>
+            <button
+              type="button"
+              className={`option-card-btn ${config.llm === 'real' ? 'active active--purple' : ''}`}
+              onClick={() => onConfigChange({ ...config, llm: 'real' })}
+            >
+              <div className="option-card-top">
+                <span className="option-card-title">Local LLM</span>
+                <span className="option-card-code">OLLAMA</span>
+              </div>
+              <span className="option-card-sub">Llama 3.1 8B</span>
+            </button>
+          </div>
 
           <label className="field-label">Security Analyst Identity</label>
           <input
@@ -90,23 +129,31 @@ export function Sidebar({ open, config, onConfigChange, onToggle }: Props) {
           />
         </div>
 
-        <hr className="sidebar-divider" />
-
-        <div className="sidebar-section">
-          <h3 className="sidebar-heading">Status Taxonomy</h3>
-          {STATUSES.map((s) => (
-            <div key={s.key} className="legend-item">
-              <StatusBadge status={s.key} />
-              <span className="legend-desc">{s.desc}</span>
-            </div>
-          ))}
+        <div className="sidebar-panel-card">
+          <div className="sidebar-heading-row">
+            <TagIcon size={13} color="#60a5fa" />
+            <h3 className="sidebar-heading">Status Taxonomy</h3>
+          </div>
+          <div className="legend-list">
+            {STATUSES.map((s) => (
+              <div key={s.key} className="legend-item">
+                <StatusBadge status={s.key} />
+                <span className="legend-desc">{s.desc}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <hr className="sidebar-divider" />
-        <div className="sidebar-footer">
-          <div className="footer-spec-row"><span>Policy Engine:</span> <code>policy_v1</code></div>
-          <div className="footer-spec-row"><span>Taxonomy:</span> <code>OWASP:ASI-01</code> &middot; <code>ATLAS</code></div>
-          <div className="footer-spec-row"><span>Forensic Ledger:</span> <code>SQLite Local</code></div>
+        <div className="sidebar-panel-card sidebar-footer-card">
+          <div className="sidebar-heading-row">
+            <TerminalIcon size={13} color="#60a5fa" />
+            <h3 className="sidebar-heading">Runtime Telemetry</h3>
+          </div>
+          <div className="sidebar-footer">
+            <div className="footer-spec-row"><span>Policy Engine</span> <code>policy_v1</code></div>
+            <div className="footer-spec-row"><span>Taxonomy</span> <code>OWASP:ASI-01</code></div>
+            <div className="footer-spec-row"><span>Forensic Ledger</span> <code>SQLite Local</code></div>
+          </div>
         </div>
       </aside>
     </>
