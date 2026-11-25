@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function MetricCard({ value, label, sub, color, borderColor }: Props) {
-  const accent = color || '#3b82f6'
+  const accent = color || '#14b8a6'
 
   return (
     <div

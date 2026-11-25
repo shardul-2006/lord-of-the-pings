@@ -74,7 +74,7 @@ export function DropZone({ onFile, accept, maxSizeMB = 200, disabled }: Props) {
       {selectedFile ? (
         <div className="dropzone-selected fade-in">
           <div className="file-icon-glow">
-            <FileIcon size={28} color="#3b82f6" />
+            <FileIcon size={28} color="#14b8a6" />
           </div>
           <div>
             <div className="dropzone-filename">{selectedFile.name}</div>
@@ -87,11 +87,11 @@ export function DropZone({ onFile, accept, maxSizeMB = 200, disabled }: Props) {
       ) : (
         <div className="dropzone-empty">
           <div className="upload-icon-pulse">
-            <UploadIcon size={32} color="#3b82f6" />
+            <UploadIcon size={32} color="#14b8a6" />
           </div>
-          <div className="dropzone-text">Drop document here or click to browse</div>
+          <div className="dropzone-text">Drag and drop a file here, or click to browse</div>
           <div className="dropzone-hint">
-            {accept ? accept.replace(/\./g, '').toUpperCase() : 'PDF, MD, HTML'} &middot; {maxSizeMB} MB max &middot; Fail-Closed Guard
+            Supports {accept ? accept.replace(/\./g, '').toUpperCase().split(',').join(', ') : 'PDF, MD, HTML'} up to {maxSizeMB} MB &middot; Fail-closed magic-byte check
           </div>
         </div>
       )}

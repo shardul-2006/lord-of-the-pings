@@ -1,37 +1,50 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Header } from './components/Header'
 import { Sidebar } from './components/Sidebar'
 import Scanner from './components/Scanner/Scanner'
 import { DocumentConsole } from './pages/DocumentConsole'
 import { DatasetGate } from './pages/DatasetGate'
 import { Architecture } from './pages/Architecture'
+import { FileIcon, DatabaseIcon, LayersIcon } from './components/icons'
 import type { AppConfig } from './types'
 
 type Page = 'documents' | 'dataset' | 'architecture'
 
 export default function App() {
   const [page, setPage] = useState<Page>('documents')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth > 1024 : true
+  )
   const [config, setConfig] = useState<AppConfig>({
     tier: 'external_upload',
     llm: 'mock',
     analyst: 'secops_analyst_01',
   })
 
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth <= 1024) {
+        setSidebarOpen(false)
+      }
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
   return (
     <div className="app-root">
       <div className="scanner-background-canvas" aria-hidden="true">
         <Scanner
-          color1="#10063f"
-          color2="#0653a9"
-          color3="#FFFFFF"
-          speed={0.4}
-          sweepSpeed={0.22}
+          color1="#090d12"
+          color2="#0d6e66"
+          color3="#5eead4"
+          speed={0.42}
+          sweepSpeed={0.24}
           sweepWidth={1.6}
-          trail={0.5}
-          ripple={0.22}
+          trail={0.55}
+          ripple={0.24}
           bandDensity={11}
-          glow={0.6}
+          glow={0.65}
           scanDirection="vertical"
           colorSpread={0.7}
           scanline
@@ -42,7 +55,7 @@ export default function App() {
           scale={1.5}
           frequency={2}
           lineWidth={1.2}
-          brightness={0.9}
+          brightness={0.95}
           vignette={0.35}
           grain
           grainIntensity={0.04}
@@ -61,19 +74,25 @@ export default function App() {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
       <div className={`main-area ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
-        <Header config={config} />
-        <nav className="page-nav">
-          {(['documents', 'dataset', 'architecture'] as Page[]).map((p) => (
-            <button
-              key={p}
-              className={`nav-tab ${page === p ? 'active' : ''}`}
-              onClick={() => setPage(p)}
-            >
-              {p === 'documents' && 'Document Security Console'}
-              {p === 'dataset' && 'Dataset Gate'}
-              {p === 'architecture' && 'Threat Model'}
-            </button>
-          ))}
+        <Header config={config} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <nav className="page-nav" aria-label="Primary navigation">
+          <div className="page-nav-inner">
+            {([
+              { id: 'documents', label: 'Document Security Console', Icon: FileIcon },
+              { id: 'dataset', label: 'Dataset Gate', Icon: DatabaseIcon },
+              { id: 'architecture', label: 'Threat Model', Icon: LayersIcon },
+            ] as { id: Page; label: string; Icon: typeof FileIcon }[]).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                className={`nav-tab ${page === id ? 'active' : ''}`}
+                onClick={() => setPage(id)}
+              >
+                <Icon size={15} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         </nav>
         <main className="page-content">
           <div className={`page-panel ${page === 'documents' ? 'visible' : ''}`}>

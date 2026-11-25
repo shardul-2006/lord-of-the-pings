@@ -21,17 +21,20 @@ const STATUSES: { key: ScanStatus; desc: string }[] = [
 export function Sidebar({ open, config, onConfigChange, onToggle }: Props) {
   return (
     <>
+      {open && <div className="sidebar-backdrop" onClick={onToggle} aria-hidden="true" />}
       <button className="sidebar-toggle" onClick={onToggle} aria-label="Toggle sidebar">
         {open ? '\u2039' : '\u203A'}
       </button>
       <aside className={`sidebar ${open ? 'open' : 'closed'}`}>
         <div className="sidebar-brand">
           <div className="sidebar-brand-icon">
-            <ShieldIcon size={22} />
+            <ShieldIcon size={26} />
           </div>
           <div>
-            <div className="sidebar-brand-name">RAG-Shield Console</div>
-            <div className="sidebar-brand-sub">Security Operations Command</div>
+            <div className="sidebar-brand-name">
+              <span className="brand-rag">RAG-</span><span className="brand-shield">Shield</span>
+            </div>
+            <div className="sidebar-brand-sub">Security Operations</div>
           </div>
         </div>
 
@@ -86,7 +89,7 @@ export function Sidebar({ open, config, onConfigChange, onToggle }: Props) {
             className="field-input"
             value={config.analyst}
             onChange={(e) => onConfigChange({ ...config, analyst: e.target.value })}
-            placeholder="Analyst ID for trust ledger..."
+            placeholder="e.g., alice.chen@secops"
           />
         </div>
 

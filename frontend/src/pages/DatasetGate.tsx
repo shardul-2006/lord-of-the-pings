@@ -5,6 +5,7 @@ import { DropZone } from '../components/DropZone'
 import { ScanProgress } from '../components/ScanProgress'
 import { MetricCard } from '../components/MetricCard'
 import { ToastContainer, type ToastMessage } from '../components/Toast'
+import { DatabaseIcon } from '../components/icons'
 
 interface Props {
   config: AppConfig
@@ -155,15 +156,15 @@ export function DatasetGate({ config: _config }: Props) {
               value={result.summary.total}
               label="Total Rows"
               sub="Parsed & analyzed"
-              color="#3b82f6"
-              borderColor="#3b82f6"
+              color="#14b8a6"
+              borderColor="#14b8a6"
             />
             <MetricCard
               value={result.summary.quarantined}
               label="Poisoned Rows"
               sub="Backdoor triggers isolated"
-              color="#ef4444"
-              borderColor="#ef4444"
+              color="#f43f5e"
+              borderColor="#f43f5e"
             />
             <MetricCard
               value={result.summary.duplicates}
@@ -176,8 +177,8 @@ export function DatasetGate({ config: _config }: Props) {
               value={result.summary.near_duplicates}
               label="Near Duplicates"
               sub="MinHash / LSH similarity"
-              color="#8b5cf6"
-              borderColor="#8b5cf6"
+              color="#a78bfa"
+              borderColor="#a78bfa"
             />
           </div>
 
@@ -218,7 +219,22 @@ export function DatasetGate({ config: _config }: Props) {
       )}
 
       {!result && !scanning && (
-        <div className="empty-state fade-in">Upload a CSV or JSONL dataset or run the 1,000-row demo to inspect pre-retrieval screening.</div>
+        <div className="empty-state hud-box fade-in">
+          <span className="hud-corner hud-corner--tl" />
+          <span className="hud-corner hud-corner--tr" />
+          <div className="empty-state-icon">
+            <DatabaseIcon size={24} color="#2dd4bf" />
+          </div>
+          <h3 className="empty-state-title">Ready for Pre-Retrieval Screening</h3>
+          <p className="empty-state-desc">
+            Upload a CSV or JSONL corpus (with a &lsquo;text&rsquo; column) or run the 1,000-row synthetic demo above to screen for backdoor triggers and duplicates.
+          </p>
+          <div className="empty-state-steps">
+            <span className="empty-step-pill">Backdoor Trigger Detection</span>
+            <span className="empty-step-pill">SHA-256 Exact Dedup</span>
+            <span className="empty-step-pill">MinHash Near-Duplicates</span>
+          </div>
+        </div>
       )}
     </div>
   )

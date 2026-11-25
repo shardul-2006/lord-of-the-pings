@@ -12,6 +12,12 @@ interface Props {
   analyst?: string
 }
 
+export function formatSentenceLabel(sentenceId?: string | null): string {
+  if (!sentenceId) return 'Document'
+  const match = sentenceId.match(/-s(\d+)$/i)
+  return match ? `Sentence #${match[1]}` : sentenceId
+}
+
 export function FindingCard({ finding, text, status, onRelease, analyst }: Props) {
   const [expanded, setExpanded] = useState(false)
 
@@ -38,7 +44,9 @@ export function FindingCard({ finding, text, status, onRelease, analyst }: Props
       <div className="finding-header" onClick={() => setExpanded(!expanded)}>
         <div className="finding-header-left">
           <StatusBadge status={badgeStatus} />
-          <code className="finding-id">{finding.sentence_id}</code>
+          <span className="finding-id" title={`Ledger ID: ${finding.sentence_id}`}>
+            {formatSentenceLabel(finding.sentence_id)}
+          </span>
           <span className="finding-threat-tag">
             {finding.score >= 0.70 ? 'CRITICAL RISK' : finding.score >= 0.40 ? 'SUSPICIOUS' : 'BENIGN FACT'}
           </span>
@@ -55,11 +63,17 @@ export function FindingCard({ finding, text, status, onRelease, analyst }: Props
         </div>
       </div>
 
-      <div className="finding-text">
-        <span className="quote-mark">&ldquo;</span>
-        {text}
-        <span className="quote-mark">&rdquo;</span>
-      </div>
+      {text?.trim() ? (
+        <div className="finding-text">
+          <span className="quote-mark">&ldquo;</span>
+          {text}
+          <span className="quote-mark">&rdquo;</span>
+        </div>
+      ) : (
+        <div className="finding-text finding-text--empty">
+          Verified clean sentence retained in the defended retrieval index.
+        </div>
+      )}
 
       <div className={`finding-details ${expanded ? 'expanded' : ''}`}>
         <div className="telemetry-bar-row">
@@ -106,11 +120,22 @@ export function FindingCard({ finding, text, status, onRelease, analyst }: Props
 
         <div className="finding-signals">
           <strong>Signals Detected:</strong>{' '}
-          {finding.signals.map(s => (
-            <span key={s.type} className="signal-chip">{s.type}</span>
-          )) || 'None'}
+          {finding.signals.length > 0
+            ? finding.signals.map(s => (
+                <span key={s.type} className="signal-chip">{s.type}</span>
+              ))
+            : <span className="finding-none">None</span>}
           <br />
-          <strong>Forensic Rationale:</strong> {finding.decision_reason}
+          <strong>Forensic Rationale:</strong>{' '}
+          {finding.decision_reason || (
+            status === 'quarantined' || status === 'flagged'
+              ? 'Withheld from defended retrieval index (high injection risk).'
+              : status === 'review_required'
+              ? 'Held from defended retrieval pending analyst review.'
+              : 'Retained in defended retrieval index (below risk threshold).'
+          )}
+          <br />
+          <strong>Ledger ID:</strong> <code>{finding.sentence_id}</code>
         </div>
 
         {(status === 'quarantined' || status === 'flagged' || status === 'review_required') && onRelease && (

@@ -1,13 +1,23 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import type { AppConfig, IngestResult, Finding, ReviewItem, DocumentMeta, ScanStatus, SampleInfo, IntegrityResult } from '../types'
 import * as api from '../api'
 import { DropZone } from '../components/DropZone'
 import { ScanProgress } from '../components/ScanProgress'
 import { PostureCard } from '../components/PostureCard'
 import { MetricCard } from '../components/MetricCard'
-import { FindingCard } from '../components/FindingCard'
+import { FindingCard, formatSentenceLabel } from '../components/FindingCard'
 import { StatusBadge } from '../components/StatusBadge'
-import { SearchIcon, Loader, ShieldIcon } from '../components/icons'
+import {
+  SearchIcon,
+  Loader,
+  ShieldIcon,
+  ActivityIcon,
+  SplitCompareIcon,
+  EyeIcon,
+  ClipboardCheckIcon,
+  ScaleIcon,
+  DownloadIcon,
+} from '../components/icons'
 import { ToastContainer, type ToastMessage } from '../components/Toast'
 
 type SubTab = 'findings' | 'arena' | 'evidence' | 'review' | 'integrity' | 'export'
@@ -127,6 +137,14 @@ export function DocumentConsole({ config }: Props) {
   const [integrityLoading, setIntegrityLoading] = useState(false)
   const [integrityResult, setIntegrityResult] = useState<IntegrityResult | null>(null)
   const [integrityDomain, setIntegrityDomain] = useState<'hr' | 'paper_review'>('hr')
+  const workspaceRef = useRef<HTMLDivElement>(null)
+
+  const selectPostAnalysisTab = useCallback((tab: SubTab, scroll = false) => {
+    setSubTab(tab)
+    if (scroll && workspaceRef.current) {
+      workspaceRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [])
 
   const addToast = (title: string, message: string, type: ToastMessage['type'] = 'info') => {
     setToasts(prev => [...prev, { id: Math.random().toString(), title, message, type }])
@@ -291,8 +309,9 @@ export function DocumentConsole({ config }: Props) {
     if (filterMode === 'clean' && stat !== 'clean' && stat !== 'released') return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      const text = w?.text || f.decision_reason
-      if (!text.toLowerCase().includes(q) && !f.sentence_id.toLowerCase().includes(q)) return false
+      const text = w?.text || f.decision_reason || ''
+      const label = formatSentenceLabel(f.sentence_id).toLowerCase()
+      if (!text.toLowerCase().includes(q) && !f.sentence_id.toLowerCase().includes(q) && !label.includes(q)) return false
     }
     return true
   })
@@ -310,7 +329,7 @@ export function DocumentConsole({ config }: Props) {
         </div>
         <div className="quick-stats-pill">
           <span className="live-radar-dot" />
-          <span>RADAR READY</span>
+          <span>System Ready</span>
         </div>
       </div>
 
@@ -408,15 +427,15 @@ export function DocumentConsole({ config }: Props) {
                   value={findings.length}
                   label="Parsed Sentences"
                   sub="Normalized & analyzed"
-                  color="#3b82f6"
-                  borderColor="#3b82f6"
+                  color="#14b8a6"
+                  borderColor="#14b8a6"
                 />
                 <MetricCard
                   value={quarantinedIds.length}
                   label="Quarantined"
                   sub="Withheld from index"
-                  color="#ef4444"
-                  borderColor="#ef4444"
+                  color="#f43f5e"
+                  borderColor="#f43f5e"
                 />
                 <MetricCard
                   value={reviewIds.length}
@@ -429,29 +448,103 @@ export function DocumentConsole({ config }: Props) {
                   value={cleanCount}
                   label="Defended Facts"
                   sub="Clean chunks indexed"
-                  color="#10b981"
-                  borderColor="#10b981"
+                  color="#22c55e"
+                  borderColor="#22c55e"
                 />
               </div>
 
-              <div className="subtab-nav">
-                {([
-                  ['findings', 'Sentence Findings & Radar'],
-                  ['arena', 'Vulnerable vs. Defended Arena'],
-                  ['evidence', 'PDF Evidence Overlay'],
-                  ['review', 'Human Review Queue'],
-                  ['integrity', 'Decision Integrity Lab'],
-                  ['export', 'Forensic Audit Report'],
-                ] as [SubTab, string][]).map(([key, label]) => (
+              <section className="post-analysis-hub" aria-label="Post-analysis actions">
+                <div className="post-analysis-header">
+                  <div>
+                    <h3 className="post-analysis-title">Post-Analysis Actions</h3>
+                    <p className="post-analysis-subtitle">
+                      Inspect detailed sentence-level findings or compare vulnerable vs. defended RAG behavior.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="post-action-grid">
                   <button
-                    key={key}
-                    className={`subtab ${subTab === key ? 'active' : ''}`}
-                    onClick={() => setSubTab(key)}
+                    type="button"
+                    className={`post-action-card post-action-card--results ${subTab === 'findings' ? 'active' : ''}`}
+                    onClick={() => selectPostAnalysisTab('findings', true)}
+                    aria-pressed={subTab === 'findings'}
                   >
-                    {label}
+                    <div className="post-action-top">
+                      <span className="post-action-icon post-action-icon--blue">
+                        <ActivityIcon size={20} color="#2dd4bf" />
+                      </span>
+                      <span className="post-action-badge post-action-badge--blue">
+                        {findings.length} {findings.length === 1 ? 'Sentence' : 'Sentences'}
+                      </span>
+                    </div>
+                    <div className="post-action-body">
+                      <div className="post-action-name">View More Results</div>
+                      <p className="post-action-desc">
+                        Inspect sentence-by-sentence risk scores, signal decomposition (H, L, S, C), and forensic rationale.
+                      </p>
+                    </div>
+                    <div className="post-action-footer">
+                      <span className="post-action-cta">
+                        {subTab === 'findings' ? 'Viewing Findings' : 'Inspect Detailed Findings \u2192'}
+                      </span>
+                    </div>
                   </button>
-                ))}
-              </div>
+
+                  <button
+                    type="button"
+                    className={`post-action-card post-action-card--compare ${subTab === 'arena' ? 'active' : ''}`}
+                    onClick={() => selectPostAnalysisTab('arena', true)}
+                    aria-pressed={subTab === 'arena'}
+                  >
+                    <div className="post-action-top">
+                      <span className="post-action-icon post-action-icon--green">
+                        <SplitCompareIcon size={20} color="#34d399" />
+                      </span>
+                      <span className="post-action-badge post-action-badge--green">
+                        Side-by-Side
+                      </span>
+                    </div>
+                    <div className="post-action-body">
+                      <div className="post-action-name">Compare Results</div>
+                      <p className="post-action-desc">
+                        Run prompts concurrently against naive RAG and RAG-Shield defended retrieval to verify threat neutralization.
+                      </p>
+                    </div>
+                    <div className="post-action-footer">
+                      <span className="post-action-cta">
+                        {subTab === 'arena' ? 'Viewing Comparison' : 'Compare Pipelines \u2192'}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+
+                <div className="subtab-nav" ref={workspaceRef} role="tablist" aria-label="Analysis workspace views">
+                  {([
+                    { key: 'findings', label: 'Sentence Findings & Radar', Icon: ActivityIcon },
+                    { key: 'arena', label: 'Vulnerable vs. Defended Arena', Icon: SplitCompareIcon },
+                    { key: 'evidence', label: 'PDF Evidence Overlay', Icon: EyeIcon },
+                    { key: 'review', label: 'Human Review Queue', Icon: ClipboardCheckIcon, count: withheld.length },
+                    { key: 'integrity', label: 'Decision Integrity Lab', Icon: ScaleIcon },
+                    { key: 'export', label: 'Forensic Audit Report', Icon: DownloadIcon },
+                  ] as { key: SubTab; label: string; Icon: typeof ActivityIcon; count?: number }[]).map(({ key, label, Icon, count }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      role="tab"
+                      aria-selected={subTab === key}
+                      className={`subtab ${subTab === key ? 'active' : ''}`}
+                      onClick={() => setSubTab(key)}
+                    >
+                      <Icon size={14} />
+                      <span>{label}</span>
+                      {typeof count === 'number' && count > 0 && (
+                        <span className="subtab-count">{count}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </section>
 
               <div className="subtab-content">
                 {/* 1. Sentence Findings Tab */}
@@ -462,7 +555,7 @@ export function DocumentConsole({ config }: Props) {
                         <SearchIcon size={14} color="#64748b" />
                         <input
                           type="text"
-                          placeholder="Filter by sentence text or ID (e.g. S-001)..."
+                          placeholder="Search by sentence content, ID (e.g., s6), or rationale..."
                           value={searchQuery}
                           onChange={e => setSearchQuery(e.target.value)}
                         />
@@ -486,7 +579,15 @@ export function DocumentConsole({ config }: Props) {
                     </div>
 
                     {filteredFindings.length === 0 ? (
-                      <div className="empty-state">No sentences match the current filter criteria.</div>
+                      <div className="empty-state empty-state--compact">
+                        <div className="empty-state-icon">
+                          <SearchIcon size={20} color="#2dd4bf" />
+                        </div>
+                        <div className="empty-state-title">No Matching Sentences</div>
+                        <p className="empty-state-desc">
+                          No analyzed sentences match your current search or disposition filter.
+                        </p>
+                      </div>
                     ) : (
                       filteredFindings.map(f => {
                         const w = withheldMap[f.sentence_id]
@@ -537,7 +638,7 @@ export function DocumentConsole({ config }: Props) {
                         className="field-input field-input--wide"
                         value={question}
                         onChange={e => setQuestion(e.target.value)}
-                        placeholder="Type prompt to evaluate both pipelines..."
+                        placeholder="Enter an evaluation prompt (e.g., Summarize candidate qualifications)..."
                       />
                       <button
                         className="btn btn--primary btn--glow"
@@ -602,8 +703,14 @@ export function DocumentConsole({ config }: Props) {
                         </div>
                       </div>
                     ) : (
-                      <div className="empty-state">
-                        Visual bounding-box evidence overlays are available for PDF format documents.
+                      <div className="empty-state empty-state--compact">
+                        <div className="empty-state-icon">
+                          <EyeIcon size={20} color="#2dd4bf" />
+                        </div>
+                        <div className="empty-state-title">PDF Overlay Unavailable for This Format</div>
+                        <p className="empty-state-desc">
+                          Visual bounding-box evidence overlays are generated for PDF documents. Structured sentence telemetry is available in Sentence Findings.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -617,13 +724,23 @@ export function DocumentConsole({ config }: Props) {
                       Reversibly release false positives into the defended index, or verify quarantined malicious directives.
                     </p>
                     {withheld.length === 0 ? (
-                      <div className="empty-state">Queue Empty: No sentences are currently withheld for this document.</div>
+                      <div className="empty-state empty-state--compact">
+                        <div className="empty-state-icon empty-state-icon--green">
+                          <ClipboardCheckIcon size={20} color="#22c55e" />
+                        </div>
+                        <div className="empty-state-title">All Sentences Cleared</div>
+                        <p className="empty-state-desc">
+                          No items pending review &mdash; all sentences in this document are cleared for defended retrieval.
+                        </p>
+                      </div>
                     ) : (
                       withheld.map(item => (
                         <div key={item.sentence_id} className="review-item hud-box fade-in">
                           <div className="review-item-header">
                             <StatusBadge status={item.status === 'quarantined' ? 'flagged' : 'review_required'} />
-                            <code>{item.sentence_id}</code>
+                            <span className="finding-id" title={`Ledger ID: ${item.sentence_id}`}>
+                              {formatSentenceLabel(item.sentence_id)}
+                            </span>
                           </div>
                           <div className="review-item-text">&ldquo;{item.text}&rdquo;</div>
                           <div className="review-item-actions">
@@ -647,7 +764,16 @@ export function DocumentConsole({ config }: Props) {
                         <h4>Audit Ledger Provenance Trail</h4>
                         {events.map((ev, i) => (
                           <div key={i} className="audit-event">
-                            Action: <code>{ev.action}</code> on <code>{ev.sentence_id}</code> by Analyst <strong>{ev.actor}</strong> at {ev.at}
+                            Action: <code>{ev.action}</code>
+                            {ev.sentence_id && (
+                              <>
+                                {' '}on{' '}
+                                <strong title={`Ledger ID: ${ev.sentence_id}`}>
+                                  {formatSentenceLabel(ev.sentence_id)}
+                                </strong>
+                              </>
+                            )}{' '}
+                            by Analyst <strong>{ev.actor}</strong> at {ev.at}
                           </div>
                         ))}
                       </div>
@@ -745,8 +871,23 @@ export function DocumentConsole({ config }: Props) {
       )}
 
       {!result && !scanning && (
-        <div className="empty-state fade-in">
-          Choose a preset attack sample or drop a custom file above to initiate automated security inspection.
+        <div className="empty-state hud-box fade-in">
+          <span className="hud-corner hud-corner--tl" />
+          <span className="hud-corner hud-corner--tr" />
+          <div className="empty-state-icon">
+            <ShieldIcon size={24} color="#2dd4bf" />
+          </div>
+          <h3 className="empty-state-title">Ready for Document Screening</h3>
+          <p className="empty-state-desc">
+            Select a sample from the Attack Library or upload a PDF, Markdown, or HTML file above to inspect sentence-level threats.
+          </p>
+          <div className="empty-state-steps">
+            <span className="empty-step-pill"><span className="empty-step-num">1</span> Guard &amp; Canonicalize</span>
+            <span className="empty-step-arrow">&rarr;</span>
+            <span className="empty-step-pill"><span className="empty-step-num">2</span> Sentence Quarantine</span>
+            <span className="empty-step-arrow">&rarr;</span>
+            <span className="empty-step-pill"><span className="empty-step-num">3</span> Compare &amp; Verify</span>
+          </div>
         </div>
       )}
     </div>

@@ -31,9 +31,9 @@ export function ScanProgress({ filename, stage }: Props) {
           <span className="radar-dot" />
         </div>
         <div className="radar-meta">
-          <div className="radar-title">ACTIVE SECURITY SCANNER // MULTI-LAYER ANALYSIS</div>
+          <div className="radar-title">Multi-Layer Security Scan</div>
           <div className="radar-target">
-            Target: <strong>{filename}</strong> &middot; <span className="telemetry-mono">DEFENSE ENGAGED</span>
+            Target: <strong>{filename}</strong>
           </div>
         </div>
         <div className="radar-counter">

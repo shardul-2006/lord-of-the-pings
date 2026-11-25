@@ -53,6 +53,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastMessage; onDismiss: () =>
         <div className="toast-desc">{toast.message}</div>
       </div>
       <button className="toast-close" onClick={onDismiss}>&times;</button>
+      <div className="toast-progress" style={{ background: borderColor }} />
     </div>
   )
 }

@@ -49,7 +49,9 @@ export function PostureCard({ result, filename }: Props) {
         </div>
         <div className="posture-meta">
           <span className="posture-chip">Target: <strong>{filename}</strong></span>
-          <span className="posture-chip">Doc ID: <code>{doc_id?.slice(0, 12)}...</code></span>
+          <span className="posture-chip" title={`Full Document ID: ${doc_id}`}>
+            Fingerprint: <code>#{doc_id?.slice(0, 8)}</code>
+          </span>
           <span className="posture-chip">Index: <code>v{index_version || 1}</code></span>
           <span className="posture-chip">Disposition: <strong>{status.toUpperCase()}</strong></span>
         </div>
